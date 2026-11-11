@@ -1,0 +1,989 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Air Attack Risk Brief</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Build 1. Inputs in flow order on the left, map and brief on the right; stacks on phones. */
+:root {
+  --bg: #eef1f4; --panel: #ffffff; --ink: #17212c; --muted: #5a6877; --line: #d3dae2;
+  --accent: #1d4f80; --accent-soft: #e2ebf5; --sample: #8a5a00; --sample-bg: #fff3d6;
+  --r0: #2f7d4a; --r0bg: #e3f2e8; --r1: #a66a00; --r1bg: #fdf0d5;
+  --r2: #c0392b; --r2bg: #fbe3e0; --r3: #7d1622; --r3bg: #f3d3d7;
+  --pend: #6c7a89; --pendbg: #eceff3;
+  --vfr: #2f7d4a; --mvfr: #1f5fbf; --ifr: #c0392b; --lifr: #a0257a;
+  --k-cimt: #c0392b; --k-t3: #d98200; --k-t4: #1f5fbf; --k-ia: #a0257a;
+  --font-display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f151c; --panel: #17202a; --ink: #e4e9ef; --muted: #98a5b3; --line: #2a3644;
+    --accent: #7fb0e6; --accent-soft: #1d2d40; --sample: #f0c060; --sample-bg: #3a2e12;
+    --r0: #6cc58b; --r0bg: #17301f; --r1: #f0b44a; --r1bg: #3a2c10;
+    --r2: #f07a6c; --r2bg: #3d1a17; --r3: #ff9aa6; --r3bg: #4a1420;
+    --pend: #98a5b3; --pendbg: #222c37;
+    --vfr: #6cc58b; --mvfr: #74a8ff; --ifr: #f07a6c; --lifr: #e586c9;
+    --k-cimt: #f07a6c; --k-t3: #f0b44a; --k-t4: #74a8ff; --k-ia: #e586c9;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 1400px; margin: 0 auto; padding: 16px 16px 40px; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
+.mono { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+[hidden] { display: none !important; }
+.advisory { background: var(--r1bg); border: 1px solid var(--r1); border-radius: 6px; padding: 8px 12px; font-size: 13px; }
+.advisory b { color: var(--r1); }
+header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; margin: 14px 0 10px; }
+header.top h1 { font-size: 30px; font-weight: 700; letter-spacing: .01em; }
+header.top .sub { color: var(--muted); font-size: 14px; }
+.modebar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.modebar input[type="date"] { width: auto; }
+.replaynote { background: var(--sample-bg); color: var(--sample); border-radius: 6px; padding: 7px 12px; font-size: 13px; font-weight: 500; margin-bottom: 10px; }
+.feeds { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); }
+.chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--pend); flex: none; }
+.chip.ok .dot { background: var(--r0); } .chip.warn .dot { background: var(--r1); } .chip.err .dot { background: var(--r2); } .chip.load .dot { background: var(--mvfr); }
+.grid { display: grid; grid-template-columns: minmax(0, 410px) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 940px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+.step { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.step .n { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--panel); font-family: var(--font-display); font-weight: 700; display: grid; place-items: center; font-size: 14px; }
+.step h2 { font-size: 18px; font-weight: 600; }
+.step .tag { margin-left: auto; }
+label.fl { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 4px; }
+select, input[type="time"], input[type="number"], input[type="date"], input[type="text"] { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; }
+select:focus-visible, input:focus-visible, button:focus-visible, .inc:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sample-tag { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--sample); background: var(--sample-bg); padding: 2px 7px; border-radius: 4px; }
+.metar { margin-top: 10px; font-size: 12.5px; background: var(--bg); border-radius: 6px; padding: 8px 10px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px 12px; margin-top: 10px; }
+.kv div span { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.kv div b { font-family: var(--font-data); font-weight: 500; font-size: 14px; font-variant-numeric: tabular-nums; }
+.kv div b .fc { display: inline-block; font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: .06em; padding: 0 8px; border-radius: 4px; border: 1.5px solid currentColor; }
+.fc.VFR { color: var(--vfr); } .fc.MVFR { color: var(--mvfr); } .fc.IFR { color: var(--ifr); } .fc.LIFR { color: var(--lifr); }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; font-family: var(--font-data); font-size: 13px; padding: 8px 10px; border: 0; border-right: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--panel); font-weight: 500; }
+.hint { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+.inc-list { display: flex; flex-direction: column; gap: 6px; max-height: 380px; overflow-y: auto; margin-top: 8px; }
+.inc { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 10px; align-items: center; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; cursor: pointer; background: var(--panel); }
+.inc:hover { border-color: var(--accent); }
+.inc.sel { border-color: var(--accent); background: var(--accent-soft); }
+.inc input { margin: 0; accent-color: var(--accent); }
+.inc .nm { font-weight: 600; }
+.inc .meta { grid-column: 2 / 4; font-size: 12.5px; color: var(--muted); }
+.inc .dist { font-family: var(--font-data); font-size: 13px; text-align: right; white-space: nowrap; }
+.cx { font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+.empty { color: var(--muted); font-size: 13.5px; padding: 10px; border: 1px dashed var(--line); border-radius: 6px; }
+.form2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.form2 .full { grid-column: 1 / -1; }
+.check { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+.rwynote { margin-top: 6px; font-size: 12.5px; font-weight: 600; padding: 4px 9px; border-radius: 6px; }
+.rwynote.fav { background: var(--r0bg); color: var(--r0); } .rwynote.off { background: var(--r1bg); color: var(--r1); }
+.rwyfig { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+#rwyplot { width: 150px; height: 150px; flex: none; }
+#rwyplot .rw { stroke: var(--line); stroke-width: 6; }
+#rwyplot .rw.on { stroke: var(--accent); stroke-width: 8; }
+#rwyplot .cl { stroke: var(--panel); stroke-width: 1; stroke-dasharray: 4 3; }
+#rwyplot text { font-family: var(--font-data); font-size: 10px; fill: var(--muted); text-anchor: middle; dominant-baseline: central; }
+#rwyplot text.sel { fill: var(--ink); font-weight: 700; font-size: 12px; }
+#rwyplot .wind { stroke: var(--r1); fill: var(--r1); stroke-width: 2; }
+#rwyplot .ring { fill: none; stroke: var(--line); stroke-dasharray: 2 3; }
+.k-CIMT { fill: var(--k-cimt); } .k-T3 { fill: var(--k-t3); } .k-T4 { fill: var(--k-t4); } .k-IA { fill: var(--k-ia); }
+svg.sym { width: 14px; height: 14px; flex: none; vertical-align: -2px; }
+.filt { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 4px; font-size: 13.5px; }
+.filt label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.filt input { accent-color: var(--accent); margin: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 4px; }
+/* Brief */
+.band { border-radius: 8px; padding: 14px 16px; border: 1px solid; }
+.band.l0 { background: var(--r0bg); border-color: var(--r0); } .band.l1 { background: var(--r1bg); border-color: var(--r1); }
+.band.l2 { background: var(--r2bg); border-color: var(--r2); } .band.l3 { background: var(--r3bg); border-color: var(--r3); }
+.band.none { background: var(--pendbg); border-color: var(--line); }
+.band .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.band .lvl { font-family: var(--font-display); font-size: 34px; font-weight: 700; line-height: 1.1; }
+.band.l0 .lvl { color: var(--r0); } .band.l1 .lvl { color: var(--r1); } .band.l2 .lvl { color: var(--r2); } .band.l3 .lvl { color: var(--r3); } .band.none .lvl { color: var(--muted); }
+.band ol { margin: 8px 0 0; padding-left: 20px; font-size: 14px; }
+.band .rule { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.stops { display: flex; flex-direction: column; gap: 6px; }
+.stops:not(:empty) { margin-top: 10px; }
+.stop { background: var(--r3bg); border: 1px solid var(--r3); border-radius: 6px; padding: 7px 10px; font-size: 13.5px; }
+.stop b { color: var(--r3); }
+.maphead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.maphead select { width: auto; }
+#map { height: 460px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); z-index: 0; }
+@media (max-width: 640px) { #map { height: 340px; } }
+.mk svg { width: 18px; height: 18px; overflow: visible; filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff); }
+.mk.sel svg { width: 26px; height: 26px; }
+.mk.sel svg * { stroke: #111; stroke-width: 1.4; }
+.basemk { width: 14px; height: 14px; background: #1d4f80; border: 2px solid #fff; transform: rotate(45deg); box-shadow: 0 0 3px #000; }
+.altmk { width: 12px; height: 12px; background: #fff; border: 3px solid #1d4f80; border-radius: 50%; box-shadow: 0 0 3px #000; }
+.route { display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: 10px; }
+.route div { background: var(--bg); border-radius: 6px; padding: 8px 10px; }
+.route span { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.route b { font-family: var(--font-data); font-weight: 500; font-size: 16px; font-variant-numeric: tabular-nums; }
+.tbl { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 560px; }
+th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr.grp td { background: var(--bg); font-family: var(--font-display); font-weight: 600; font-size: 13px; letter-spacing: .05em; text-transform: uppercase; color: var(--accent); padding: 5px 8px; }
+td.val { font-family: var(--font-data); font-size: 13px; }
+td.src { font-size: 12.5px; color: var(--muted); }
+.pill { display: inline-block; min-width: 82px; text-align: center; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.l0 { background: var(--r0bg); color: var(--r0); } .pill.l1 { background: var(--r1bg); color: var(--r1); }
+.pill.l2 { background: var(--r2bg); color: var(--r2); } .pill.l3 { background: var(--r3bg); color: var(--r3); }
+.pill.pend { background: var(--pendbg); color: var(--pend); }
+.mit { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.next { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.next a, .btn { font-family: var(--font-display); font-weight: 600; font-size: 16px; padding: 7px 14px; border-radius: 6px; cursor: pointer; text-decoration: none; }
+.next a { color: var(--panel); background: var(--accent); border: 1.5px solid var(--accent); }
+.btn { color: var(--accent); background: var(--panel); border: 1.5px solid var(--accent); }
+.btn.sm { font-size: 14px; padding: 4px 10px; }
+.next .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+#brieftext { width: 100%; min-height: 180px; margin-top: 10px; font-family: var(--font-data); font-size: 12px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+details { font-size: 13.5px; }
+details summary { cursor: pointer; font-family: var(--font-display); font-weight: 600; font-size: 16px; }
+details ul { padding-left: 18px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="advisory"><b>Situational awareness only.</b> Not for navigation or dispatch. Verify with official sources and complete the agency FRAT. Aircraft numbers and rating thresholds are placeholders pending ATGS review.</div>
+
+  <header class="top">
+    <div>
+      <h1>Air Attack Risk Brief</h1>
+      <div class="sub">Pre-flight situational brief for ATGS missions · <span id="today"></span></div>
+    </div>
+    <div class="modebar">
+      <div class="seg" id="mode" role="group" aria-label="Data mode">
+        <button type="button" data-m="live" id="mlive">Live</button>
+        <button type="button" data-m="replay" id="mreplay">Replay</button>
+      </div>
+      <input type="date" id="rdate" value="2026-07-25" min="2026-01-01" aria-label="Replay date" hidden>
+      <button type="button" class="btn sm" id="testcase">Test case: Jul 25, 2026</button>
+    </div>
+  </header>
+  <div class="replaynote" id="replaynote" hidden></div>
+
+  <div class="feeds" id="feeds" aria-label="Data feed status"></div>
+
+  <div class="grid">
+    <!-- INPUTS -->
+    <div class="col">
+      <section class="card">
+        <div class="step"><span class="n">1</span><h2>Staffing airport</h2></div>
+        <label class="fl" for="airport">Airport where the aircraft is staffed</label>
+        <select id="airport"></select>
+        <label class="fl" for="otherapt" style="margin-top:8px">Or any other airport (type an ID or city)</label>
+        <input type="text" id="otherapt" list="aptlist" placeholder="e.g. KJSY or Joseph" autocomplete="off">
+        <datalist id="aptlist"></datalist>
+        <div class="metar mono" id="metar">Loading weather…</div>
+        <label class="fl" for="runway" style="margin-top:10px">Runway</label>
+        <select id="runway"></select>
+        <div class="rwynote" id="rwynote"></div>
+        <div class="rwyfig"><svg id="rwyplot" viewBox="-80 -80 160 160" role="img" aria-label="Runway layout with wind direction"></svg>
+          <div class="hint" style="margin:0">Runway layout from published runway-end coordinates. Arrow shows where the wind is blowing from.</div></div>
+        <div class="kv" id="aptkv"></div>
+      </section>
+
+      <section class="card">
+        <div class="step"><span class="n">2</span><h2>Aircraft profile</h2><span class="tag sample-tag">Placeholder data</span></div>
+        <label class="fl" for="aircraft">Aircraft staffed today</label>
+        <select id="aircraft"></select>
+        <div class="kv" id="acftkv"></div>
+      </section>
+
+      <section class="card">
+        <div class="step"><span class="n">3</span><h2>Search radius</h2></div>
+        <div class="seg" id="radius" role="group" aria-label="Search radius in nautical miles"></div>
+        <div class="hint">Nautical miles from the staffing airport. Default 100 nm.</div>
+      </section>
+
+      <section class="card">
+        <div class="step"><span class="n">4</span><h2>Incident</h2></div>
+        <div class="filt" id="filt" role="group" aria-label="Incident types to show"></div>
+        <div class="hint" id="inccount"></div>
+        <div class="inc-list" id="incidents" role="radiogroup" aria-label="Incidents within radius"></div>
+      </section>
+
+      <section class="card">
+        <div class="step"><span class="n">5</span><h2>Mission and crew</h2></div>
+        <div class="form2">
+          <div class="full"><label class="fl" for="mission">Mission type</label>
+            <select id="mission"><option value="ATGS">ATGS (2,500 ft AGL)</option><option value="ASM">ASM (1,000 ft AGL)</option><option value="LEAD">Lead plane (1,000 ft AGL)</option><option value="RECON">Recon / IAA (2,500 ft AGL)</option></select></div>
+          <div><label class="fl" for="launch">Planned launch (local)</label><input type="time" id="launch" value="13:00"></div>
+          <div><label class="fl" for="onscene">Time over fire (hrs)</label><input type="number" id="onscene" value="2.5" min="0" max="8" step="0.5"></div>
+          <div><label class="fl" for="duty">Pilot duty start (local)</label><input type="time" id="duty" value="08:00"></div>
+          <div><label class="fl" for="flown">Hours flown today</label><input type="number" id="flown" value="0" min="0" max="10" step="0.1"></div>
+          <div class="full"><label class="fl" for="recover">After the mission, land at</label>
+            <select id="recover"></select></div>
+          <div class="full" id="recmodewrap" hidden><label class="fl" for="recmode">Purpose of that stop</label>
+            <select id="recmode"><option value="refuel">Refuel, then return to staffing base</option><option value="ron">Remain overnight (RON)</option></select></div>
+          <div><label class="fl" for="acount">Aircraft over fire</label><input type="number" id="acount" value="3" min="0" max="30" step="1"></div>
+          <div><label class="fl" for="smoke">Visibility over fire</label>
+            <select id="smoke"><option value="0">Good</option><option value="1">Reduced (smoke or cloud)</option><option value="2">Poor (&lt; 3 sm)</option></select></div>
+          <div class="full"><label class="fl" for="tsfire">Thunderstorms near fire</label>
+            <select id="tsfire"><option value="0">None</option><option value="1">Forecast or building</option><option value="3">Active within 20 nm</option></select></div>
+          <label class="check full"><input type="checkbox" id="trainee"> Trainee aboard</label>
+          <label class="check full"><input type="checkbox" id="unfamiliar"> Crew unfamiliar with the area</label>
+          <label class="check full"><input type="checkbox" id="newjur"> New dispatch center or jurisdiction</label>
+          <div class="full"><label class="fl" style="margin:6px 0 0">Manual checks</label></div>
+          <label class="check full"><input type="checkbox" id="milok"> Military airspace (SUA/MTR) deconflicted with dispatch</label>
+          <label class="check full"><input type="checkbox" id="notamok"> NOTAMs checked for base and fire area</label>
+          <label class="check full"><input type="checkbox" id="tfrok"> TFRs checked for the fire area and route</label>
+        </div>
+      </section>
+    </div>
+
+    <!-- BRIEF -->
+    <div class="col">
+      <section class="card">
+        <div class="band none" id="band"></div>
+        <div class="stops" id="stops"></div>
+      </section>
+
+      <section class="card">
+        <div class="maphead">
+          <h3 style="font-size:18px">Map</h3>
+          <select id="basemap" aria-label="Basemap"></select>
+        </div>
+        <div id="map"></div>
+        <div class="legend" id="legend"></div>
+      </section>
+
+      <section class="card">
+        <h3 style="font-size:18px;margin-bottom:10px">Route and timing</h3>
+        <div class="route" id="route"></div>
+      </section>
+
+      <section class="card">
+        <h3 style="font-size:18px;margin-bottom:6px">Risk factors</h3>
+        <div class="hint" style="margin:0 0 8px">Grouped in the 5M order. Overall risk equals the highest factor, raised one level when three or more factors sit just below it. Thresholds are placeholders pending ATGS review.</div>
+        <div class="tbl"><table id="factors"><thead><tr><th>Factor</th><th>Value</th><th>Rating</th><th>Source</th></tr></thead><tbody></tbody></table></div>
+      </section>
+
+      <section class="card next">
+        <div style="min-width:0;flex:1 1 260px"><b>Next step:</b> complete the FS Light Fixed Wing FRAT before the first flight of the day. Copy the brief to carry the values across.</div>
+        <div class="acts"><button type="button" class="btn" id="copy">Copy brief</button>
+        <a href="https://www.fs.usda.gov/sites/default/files/fsib-26-01-aerial-sup-frat.pdf" target="_blank" rel="noopener">FS IB 26-01 (FRAT)</a></div>
+        <textarea id="brieftext" readonly hidden aria-label="Brief text"></textarea>
+      </section>
+
+      <section class="card">
+        <details>
+          <summary>Data sources and limits</summary>
+          <ul>
+            <li><b>Incidents and perimeters:</b> NIFC WFIGS, called live from this page. Perimeters lag the fire; each shows the date it was mapped.</li>
+            <li><b>Airport weather:</b> METARs and TAFs from the Iowa Environmental Mesonet, which mirrors National Weather Service data. Always confirm with an official briefing.</li>
+            <li><b>Airports and runways:</b> OurAirports (public domain), filtered to US airports with a hard-surfaced runway of 4,000 ft or more. Runway headings are true, matching METAR wind directions.</li>
+            <li><b>Terrain elevation at the fire:</b> USGS Elevation Point Query Service.</li>
+            <li><b>Replay mode:</b> incident points and day-by-day perimeters come from the WFIGS year-to-date services. Acres follow the perimeter mapped on or before the replay time. Complexity level reflects the incident's latest record, and containment for that day is not available.</li>
+            <li><b>Not connected yet:</b> TFRs, route weather advisories (G-AIRMET, SIGMET, CWA), and SUA/MTR geometry. NOTAMs, TFRs and military airspace are manual checks.</li>
+          </ul>
+        </details>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+'use strict';
+// ====================== CONFIG ======================
+const ARC = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services';
+const IEM = 'https://mesonet.agron.iastate.edu';
+const EPQS = 'https://epqs.nationalmap.gov/v1/json';
+
+// Candidate ATGS bases (unverified starter list) with GACC and time zone.
+const BASES = {
+  NW: ['Northwest', { KRDM:'America/Los_Angeles', KLMT:'America/Los_Angeles', KMFR:'America/Los_Angeles', KLGD:'America/Los_Angeles', KPDT:'America/Los_Angeles', KEAT:'America/Los_Angeles', KMWH:'America/Los_Angeles' }],
+  GB: ['Great Basin', { KBOI:'America/Boise', KMYL:'America/Boise', KSMN:'America/Boise', KPIH:'America/Boise', KCDC:'America/Denver', KMEV:'America/Los_Angeles', KBAM:'America/Los_Angeles', KELY:'America/Los_Angeles' }],
+  NO: ['Northern California', { KRDD:'America/Los_Angeles' }],
+  SO: ['Southern California', { KSBD:'America/Los_Angeles' }],
+  NR: ['Northern Rockies', { KMSO:'America/Denver', KBIL:'America/Denver' }],
+  RM: ['Rocky Mountain', { KGJT:'America/Denver', KBJC:'America/Denver' }],
+  SW: ['Southwest', { KABQ:'America/Denver', KPRC:'America/Phoenix' }],
+  AK: ['Alaska', { PAFA:'America/Anchorage' }],
+  SA: ['Southern', { KCHA:'America/New_York' }],
+};
+const BASE_TZ = Object.assign({}, ...Object.values(BASES).map(g => g[1]));
+// Main time zone by state, for airports outside the base list (split states use the larger zone).
+const STATE_TZ = { AK:'America/Anchorage', HI:'Pacific/Honolulu', WA:'America/Los_Angeles', OR:'America/Los_Angeles', CA:'America/Los_Angeles', NV:'America/Los_Angeles',
+  ID:'America/Boise', MT:'America/Denver', WY:'America/Denver', UT:'America/Denver', CO:'America/Denver', NM:'America/Denver', AZ:'America/Phoenix',
+  ND:'America/Chicago', SD:'America/Chicago', NE:'America/Chicago', KS:'America/Chicago', OK:'America/Chicago', TX:'America/Chicago', MN:'America/Chicago', IA:'America/Chicago',
+  MO:'America/Chicago', AR:'America/Chicago', LA:'America/Chicago', WI:'America/Chicago', IL:'America/Chicago', MS:'America/Chicago', AL:'America/Chicago', TN:'America/Chicago' };
+
+// Placeholder aircraft profiles. Replace with POH and contract numbers.
+// sece = single-engine service ceiling (contract minimum), tod = sea-level takeoff distance, xw = max demonstrated crosswind.
+const AIRCRAFT = [
+  { id:'AC690', name:'Aero Commander 690 series', eng:'Twin turbine', press:'Pressurized', cruise:250, endur:4.5, sece:13000, xw:20, tod:2500 },
+  { id:'AC500', name:'Aero Commander 500 series', eng:'Twin piston', press:'Unpressurized', cruise:180, endur:4.5, sece:13000, xw:20, tod:2000 },
+  { id:'BE90',  name:'King Air 90', eng:'Twin turbine', press:'Pressurized', cruise:230, endur:4.5, sece:13000, xw:20, tod:2700 },
+  { id:'BE20',  name:'King Air 200', eng:'Twin turbine', press:'Pressurized', cruise:270, endur:5.0, sece:13000, xw:20, tod:2600 },
+];
+const RESERVE_H = 0.75;          // fuel reserve held back (placeholder)
+const WORK_AGL = { ATGS:2500, RECON:2500, ASM:1000, LEAD:1000 };
+const RADII = [50, 100, 150, 200, 250, 300];
+const LEVELS = ['Low', 'Moderate', 'High', 'Extremely High'];
+const KINDS = { CIMT:'CIMT (Type 1/2)', T3:'Type 3', T4:'Type 4 / 5', IA:'New start < 24 h' };
+const BASEMAPS = {
+  topo: ['USGS Topo (terrain and roads)', 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom:16, attribution:'USGS The National Map' }],
+  sat: ['USGS Imagery (satellite)', 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom:16, attribution:'USGS The National Map' }],
+  hybrid: ['USGS Imagery with labels', 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom:16, attribution:'USGS The National Map' }],
+  osm: ['OpenStreetMap (roads)', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxNativeZoom:19, attribution:'&copy; OpenStreetMap contributors' }],
+  dark: ['Carto Dark', 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxNativeZoom:19, attribution:'&copy; OpenStreetMap contributors &copy; CARTO' }],
+};
+
+const state = { mode:'live', date:'2026-07-25', apt:'KLGD', rwy:null, acft:'AC690', radius:100, inc:null, recover:'',
+  filt:{ CIMT:true, T3:true, T4:true, IA:true } };
+const data = { airports:{}, incidents:[], perims:{}, wx:null, taf:null, elev:{}, feeds:{}, loadSeq:0, wxSeq:0 };
+
+// ====================== HELPERS ======================
+const $ = id => document.getElementById(id);
+const rad = Math.PI / 180;
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+const fmt = n => Math.round(n).toLocaleString('en-US');
+const toMin = v => { const [h, m] = (v || '00:00').split(':').map(Number); return h * 60 + m; };
+const hhmm = m => { m = ((Math.round(m) % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + String(m % 60).padStart(2, '0'); };
+const hrs = h => { const t = Math.round(h * 60); return Math.floor(t / 60) + '+' + String(t % 60).padStart(2, '0'); };
+const card = b => ['N','NE','E','SE','S','SW','W','NW'][Math.round(b / 45) % 8];
+const p3 = n => String(Math.round(n)).padStart(3, '0');
+function distNm(a, b) {
+  const dLat = (b.lat - a.lat) * rad, dLon = (b.lon - a.lon) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
+  return 3440.065 * 2 * Math.asin(Math.sqrt(h));
+}
+function bearing(a, b) {
+  const y = Math.sin((b.lon - a.lon) * rad) * Math.cos(b.lat * rad);
+  const x = Math.cos(a.lat * rad) * Math.sin(b.lat * rad) - Math.sin(a.lat * rad) * Math.cos(b.lat * rad) * Math.cos((b.lon - a.lon) * rad);
+  return (Math.atan2(y, x) / rad + 360) % 360;
+}
+// --- time zones
+function tzParts(date, tz) {
+  const p = {}; new Intl.DateTimeFormat('en-US', { timeZone: tz, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23' })
+    .formatToParts(date).forEach(x => p[x.type] = x.value);
+  return p;
+}
+const localMinutes = (date, tz) => { const p = tzParts(date, tz); return +p.hour * 60 + +p.minute; };
+const localYmd = (date, tz) => { const p = tzParts(date, tz); return `${p.year}-${p.month}-${p.day}`; };
+function zonedToUtc(ymd, minutes, tz) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const guess = Date.UTC(y, m - 1, d, 0, minutes);
+  const p = tzParts(new Date(guess), tz);
+  const asUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute);
+  return new Date(guess - (asUtc - guess));
+}
+function sunsetUTC(ymd, lat, lon) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const n = Math.round(Date.UTC(y, m - 1, d, 12) / 86400000 + 2440587.5 - 2451545.0 + 0.0008);
+  const Js = n - lon / 360;
+  const M = (357.5291 + 0.98560028 * Js) % 360;
+  const C = 1.9148 * Math.sin(M * rad) + 0.02 * Math.sin(2 * M * rad) + 0.0003 * Math.sin(3 * M * rad);
+  const L = (M + C + 180 + 102.9372) % 360;
+  const Jt = 2451545.0 + Js + 0.0053 * Math.sin(M * rad) - 0.0069 * Math.sin(2 * L * rad);
+  const sd = Math.sin(L * rad) * Math.sin(23.4397 * rad);
+  const cw = (Math.sin(-0.833 * rad) - Math.sin(lat * rad) * sd) / (Math.cos(lat * rad) * Math.cos(Math.asin(sd)));
+  const w = Math.acos(Math.max(-1, Math.min(1, cw))) / rad;
+  return new Date((Jt + w / 360 - 2440587.5) * 86400000);
+}
+// --- weather math
+function flightCat(o) {
+  const c = o.ceil ?? 99999, v = o.vis ?? 99;
+  if (c < 500 || v < 1) return 'LIFR';
+  if (c < 1000 || v < 3) return 'IFR';
+  if (c <= 3000 || v <= 5) return 'MVFR';
+  return 'VFR';
+}
+function densityAlt(elevFt, tempC, altim) {
+  const pa = elevFt + (29.92 - (altim ?? 29.92)) * 1000;
+  return Math.round(pa + 120 * (tempC - (15 - 2 * elevFt / 1000)));
+}
+// Parse a raw METAR into the handful of values the brief uses.
+function parseMetar(raw) {
+  const o = { raw, wd:null, ws:0, g:0, vrb:false, vis:null, ceil:null, t:null, alt:null, ts:null, fu:false, hz:false, ltg:false };
+  const parts = raw.trim().split(/\s+RMK\s+/);
+  const tok = parts[0].split(/\s+/);
+  o.ltg = /\bLTG/.test(parts[1] || '');
+  let m;
+  for (let i = 0; i < tok.length; i++) {
+    const t = tok[i];
+    if ((m = t.match(/^(\d{3}|VRB)(\d{2,3})(?:G(\d{2,3}))?KT$/))) { o.vrb = m[1] === 'VRB'; o.wd = o.vrb ? null : +m[1]; o.ws = +m[2]; o.g = m[3] ? +m[3] : 0; }
+    else if ((m = t.match(/^([PM])?(\d+)?(?:(\d)\/(\d+))?SM$/))) {
+      let v = (m[2] ? +m[2] : 0) + (m[3] ? +m[3] / +m[4] : 0);
+      if (!m[2] && m[3] && /^\d$/.test(tok[i - 1] || '')) v += +tok[i - 1];
+      o.vis = v;
+    }
+    else if ((m = t.match(/^(BKN|OVC|VV)(\d{3})/))) { const h = +m[2] * 100; if (o.ceil === null || h < o.ceil) o.ceil = h; }
+    else if ((m = t.match(/^(M?\d{2})\/(M?\d{2})?$/))) o.t = +m[1].replace('M', '-');
+    else if ((m = t.match(/^A(\d{4})$/))) o.alt = +m[1] / 100;
+    else if (i > 1 && /TS/.test(t) && /^[-+]?(VC)?[A-Z]{2,8}$/.test(t)) o.ts = /^[-+]?VC/.test(t) ? 'VCTS' : 'TS';
+    else if (/^(FU|VCFU)$/.test(t)) o.fu = true;
+    else if (t === 'HZ') o.hz = true;
+  }
+  return o;
+}
+// --- airports and runways
+function airport(id) { return data.airports[id]; }
+function aptTz(a) { return BASE_TZ[a.id] || STATE_TZ[a.st] || 'America/New_York'; }
+function runwayEnds(a) {
+  return a.rwy.flatMap(r => {
+    const hd = (h, id) => h ?? ((parseInt(id, 10) || 36) * 10) % 360;
+    const le = hd(r.leH, r.le), he = hd(r.heH ?? (r.leH != null ? (r.leH + 180) % 360 : null), r.he);
+    return [{ id: r.le, h: le, len: r.len, r, end: 'le' }, { id: r.he, h: he, len: r.len, r, end: 'he' }];
+  });
+}
+const sym = (k, x, y, r, extra = '') => {
+  const f = n => n.toFixed(1), c = `class="k-${k}" ${extra}`;
+  if (k === 'CIMT') return `<rect ${c} x="${f(x - r)}" y="${f(y - r)}" width="${f(2 * r)}" height="${f(2 * r)}"/>`;
+  if (k === 'T4') return `<polygon ${c} points="${f(x)},${f(y - r * 1.15)} ${f(x + r)},${f(y + r * .85)} ${f(x - r)},${f(y + r * .85)}"/>`;
+  if (k === 'IA') return `<polygon ${c} points="${f(x)},${f(y - r * 1.25)} ${f(x + r * 1.25)},${f(y)} ${f(x)},${f(y + r * 1.25)} ${f(x - r * 1.25)},${f(y)}"/>`;
+  return `<circle ${c} cx="${f(x)}" cy="${f(y)}" r="${f(r)}"/>`;
+};
+const symIcon = k => `<svg class="sym" viewBox="-7 -7 14 14" aria-hidden="true">${sym(k, 0, 0, 4.5)}</svg>`;
+const kindColor = k => getComputedStyle(document.documentElement).getPropertyValue({ CIMT:'--k-cimt', T3:'--k-t3', T4:'--k-t4', IA:'--k-ia' }[k]).trim() || '#888';
+
+// ====================== DATA LOADING ======================
+function setFeed(key, cls, text) { data.feeds[key] = { cls, text }; renderFeeds(); }
+function renderFeeds() {
+  const order = ['wfigs', 'perim', 'metar', 'taf', 'elev'];
+  const fixed = [['', 'TFRs: manual check'], ['', 'G-AIRMET / SIGMET / CWA: not connected'], ['', 'SUA / MTR: manual check'], ['', 'NOTAMs: manual check']];
+  $('feeds').innerHTML = order.filter(k => data.feeds[k]).map(k => `<span class="chip ${data.feeds[k].cls}"><span class="dot"></span>${esc(data.feeds[k].text)}</span>`).join('')
+    + fixed.map(f => `<span class="chip"><span class="dot"></span>${f[1]}</span>`).join('');
+}
+async function getJson(url, opts) {
+  const r = await fetch(url, opts);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const j = await r.json();
+  if (j && j.error) throw new Error(j.error.message || 'service error');
+  return j;
+}
+// ArcGIS query that follows pagination.
+async function arcQuery(svc, params) {
+  let out = [], offset = 0;
+  for (let page = 0; page < 8; page++) {
+    const j = await getJson(`${ARC}/${svc}/FeatureServer/0/query`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ f: 'json', outSR: '4326', ...params, resultOffset: offset }) });
+    out = out.concat(j.features || []);
+    if (!j.exceededTransferLimit || !(j.features || []).length) break;
+    offset = out.length;
+  }
+  return out;
+}
+const arcGeo = (svc, params) => getJson(`${ARC}/${svc}/FeatureServer/0/query`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  body: new URLSearchParams({ f: 'geojson', maxAllowableOffset: '0.002', geometryPrecision: '4', ...params }) });
+const ts = d => `TIMESTAMP '${d.toISOString().slice(0, 19).replace('T', ' ')}'`;
+const irwin = s => String(s || '').replace(/[{}]/g, '').toUpperCase();
+
+// Reference time: now in live mode, the planned launch on the replay date in replay mode.
+function refTime() {
+  const a = airport(state.apt);
+  return state.mode === 'replay' ? zonedToUtc(state.date, toMin($('launch').value), aptTz(a)) : new Date();
+}
+function briefYmd() { const a = airport(state.apt); return state.mode === 'replay' ? state.date : localYmd(new Date(), aptTz(a)); }
+
+function classify(lvl, org, discMs, T) {
+  const s = (lvl || '') + ' | ' + (org || '');
+  if (/Type 1|Type 2|Complex Incident|Area Command|NIMO/i.test(s)) return 'CIMT';
+  if (/Type 3/i.test(s)) return 'T3';
+  if (discMs && T - discMs < 24 * 3600e3 && T - discMs >= 0) return 'IA';
+  return 'T4';
+}
+
+async function loadIncidents() {
+  const seq = ++data.loadSeq, a = airport(state.apt), T = refTime(), replay = state.mode === 'replay';
+  const spatial = { geometry: `${a.lon},${a.lat}`, geometryType: 'esriGeometryPoint', inSR: '4326', spatialRel: 'esriSpatialRelIntersects', distance: state.radius, units: 'esriSRUnit_NauticalMile' };
+  const fields = 'IncidentName,IncidentSize,PercentContained,IncidentComplexityLevel,IncidentManagementOrganization,FireDiscoveryDateTime,ModifiedOnDateTime_dt,GACC,POOState,IrwinID,IsCpxChild,CpxName';
+  setFeed('wfigs', 'load', 'WFIGS incidents: loading…'); setFeed('perim', 'load', 'WFIGS perimeters: loading…');
+  $('incidents').innerHTML = '<div class="empty">Loading incidents…</div>';
+  let feats;
+  try {
+    if (replay) {
+      const t0 = ts(T), tDay = ts(new Date(T - 24 * 3600e3));
+      const where = `IncidentTypeCategory='WF' AND FireDiscoveryDateTime <= ${t0}`
+        + ` AND (ContainmentDateTime IS NULL OR ContainmentDateTime > ${t0}) AND (ControlDateTime IS NULL OR ControlDateTime > ${t0}) AND (FireOutDateTime IS NULL OR FireOutDateTime > ${t0})`
+        + ` AND (IncidentComplexityLevel IS NOT NULL OR IncidentManagementOrganization IS NOT NULL OR IncidentSize >= 10 OR FireDiscoveryDateTime >= ${tDay})`;
+      feats = await arcQuery('WFIGS_Incident_Locations_YearToDate', { where, ...spatial, outFields: fields, orderByFields: 'OBJECTID' });
+    } else {
+      feats = await arcQuery('WFIGS_Incident_Locations_Current', { where: "IncidentTypeCategory='WF'", ...spatial, outFields: fields, orderByFields: 'OBJECTID' });
+    }
+  } catch (e) {
+    if (seq !== data.loadSeq) return;
+    data.incidents = []; data.perims = {};
+    setFeed('wfigs', 'err', 'WFIGS incidents: failed (' + e.message + ')'); setFeed('perim', 'err', 'WFIGS perimeters: not loaded');
+    render(); return;
+  }
+  if (seq !== data.loadSeq) return;
+  data.incidents = feats.filter(f => f.geometry && isFinite(f.geometry.x)).map(f => {
+    const p = f.attributes;
+    return { id: irwin(p.IrwinID), n: (p.IncidentName || 'Unnamed').trim(), lat: f.geometry.y, lon: f.geometry.x, ac: p.IncidentSize, pct: replay ? null : p.PercentContained,
+      lvl: p.IncidentComplexityLevel, org: p.IncidentManagementOrganization, disc: p.FireDiscoveryDateTime, mod: p.ModifiedOnDateTime_dt, gacc: p.GACC,
+      cpx: p.IsCpxChild ? p.CpxName : null, k: classify(p.IncidentComplexityLevel, p.IncidentManagementOrganization, p.FireDiscoveryDateTime, +T) };
+  });
+  setFeed('wfigs', 'ok', `WFIGS incidents: ${data.incidents.length} in range${replay ? ' (replay)' : ''}`);
+  data.perims = {}; data.perimGeo = null;
+  render();
+  // Perimeters second, so the list is usable while they load.
+  try {
+    let geo;
+    if (replay) {
+      const t0 = ts(T), tMin = ts(new Date(T - 60 * 86400e3));
+      const attrs = await arcQuery('WFIGS_Daily_Perimeters_Public', { where: `(poly_PolygonDateTime <= ${t0} OR (poly_PolygonDateTime IS NULL AND poly_DateCurrent <= ${t0})) AND poly_DateCurrent >= ${tMin}`,
+        ...spatial, outFields: 'OBJECTID,poly_IRWINID,attr_IrwinID,poly_PolygonDateTime,poly_DateCurrent', returnGeometry: 'false', orderByFields: 'OBJECTID' });
+      const best = {};
+      attrs.forEach(f => { const p = f.attributes, k = irwin(p.attr_IrwinID || p.poly_IRWINID), t = p.poly_PolygonDateTime || p.poly_DateCurrent;
+        if (k && (!best[k] || t > best[k].t)) best[k] = { t, oid: p.OBJECTID }; });
+      const ids = Object.values(best).map(b => b.oid);
+      geo = ids.length ? await arcGeo('WFIGS_Daily_Perimeters_Public', { objectIds: ids.join(','), outFields: 'OBJECTID,poly_IncidentName,poly_GISAcres,attr_IrwinID,poly_IRWINID,poly_PolygonDateTime,poly_DateCurrent' })
+        : { type: 'FeatureCollection', features: [] };
+    } else {
+      geo = await arcGeo('WFIGS_Interagency_Perimeters_Current', { where: '1=1', ...spatial, outFields: 'poly_IncidentName,poly_GISAcres,attr_IrwinID,poly_IRWINID,poly_PolygonDateTime,poly_DateCurrent' });
+    }
+    if (seq !== data.loadSeq) return;
+    (geo.features || []).forEach(f => { const p = f.properties, k = irwin(p.attr_IrwinID || p.poly_IRWINID);
+      if (k) data.perims[k] = { ac: p.poly_GISAcres, t: p.poly_PolygonDateTime || p.poly_DateCurrent }; });
+    if (replay) data.incidents.forEach(i => { const p = data.perims[i.id]; if (p && p.ac) { i.ac = p.ac; i.asOf = p.t; } });
+    data.perimGeo = geo;
+    setFeed('perim', 'ok', `WFIGS perimeters: ${(geo.features || []).length} mapped`);
+  } catch (e) {
+    if (seq !== data.loadSeq) return;
+    setFeed('perim', 'err', 'WFIGS perimeters: failed (' + e.message + ')');
+  }
+  render();
+}
+
+async function loadWx() {
+  const seq = ++data.wxSeq, a = airport(state.apt), T = refTime(), replay = state.mode === 'replay';
+  const stn = /^K[A-Z0-9]{3}$/.test(a.id) ? a.id.slice(1) : a.id;
+  data.wx = null; data.taf = null;
+  setFeed('metar', 'load', 'METAR: loading…'); setFeed('taf', 'load', 'TAF: loading…');
+  $('metar').textContent = 'Loading weather…';
+  let q;
+  if (replay) {
+    const s = new Date(T - 100 * 60e3), e = new Date(+T + 5 * 60e3);
+    const part = (d, n) => `year${n}=${d.getUTCFullYear()}&month${n}=${d.getUTCMonth() + 1}&day${n}=${d.getUTCDate()}&hour${n}=${d.getUTCHours()}&minute${n}=${d.getUTCMinutes()}`;
+    q = `${part(s, 1)}&${part(e, 2)}`;
+  } else q = 'hours=3';
+  try {
+    const txt = await fetch(`${IEM}/cgi-bin/request/asos.py?station=${stn}&data=metar&${q}&tz=UTC&format=onlycomma&report_type=3&report_type=4`).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); });
+    if (seq !== data.wxSeq) return;
+    const rows = txt.trim().split('\n').slice(1).map(l => { const i1 = l.indexOf(','), i2 = l.indexOf(',', i1 + 1); return { t: new Date(l.slice(i1 + 1, i2).replace(' ', 'T') + ':00Z'), raw: l.slice(i2 + 1) }; })
+      .filter(r => r.raw && !isNaN(r.t) && r.t <= new Date(+T + 5 * 60e3));
+    if (rows.length) {
+      const last = rows[rows.length - 1];
+      data.wx = { ...parseMetar(last.raw), time: last.t };
+      const age = Math.round((T - last.t) / 60e3);
+      setFeed('metar', age > 90 ? 'warn' : 'ok', `METAR ${a.id}: ${age < 0 ? 0 : age} min old${age > 90 ? ' (stale)' : ''}`);
+    } else setFeed('metar', 'warn', `METAR ${a.id}: no observation found`);
+  } catch (e) { if (seq !== data.wxSeq) return; setFeed('metar', 'err', 'METAR: failed (' + e.message + ')'); }
+  render();
+  if (replay) { setFeed('taf', '', 'TAF: not shown in replay'); return; }
+  try {
+    const j = await getJson(`${IEM}/api/1/nws/taf.json?station=${a.id}`);
+    if (seq !== data.wxSeq) return;
+    if (j.data && j.data.length) { data.taf = j.data; setFeed('taf', 'ok', `TAF ${a.id}: issued ${String(j.data[0].utc_taf_issue || '').slice(11, 16)}Z`); }
+    else setFeed('taf', '', `TAF: none issued for ${a.id}`);
+  } catch (e) { if (seq !== data.wxSeq) return; setFeed('taf', '', `TAF: none available for ${a.id}`); }
+  render();
+}
+
+async function loadElev(inc) {
+  if (!inc || data.elev[inc.id] !== undefined) return;
+  data.elev[inc.id] = null;
+  setFeed('elev', 'load', 'Fire elevation: loading…');
+  try {
+    const j = await getJson(`${EPQS}?x=${inc.lon.toFixed(5)}&y=${inc.lat.toFixed(5)}&units=Feet&wkid=4326`);
+    const v = +j.value;
+    if (isFinite(v) && v > -1000) { data.elev[inc.id] = v; setFeed('elev', 'ok', 'Fire elevation: USGS'); }
+    else { data.elev[inc.id] = false; setFeed('elev', 'warn', 'Fire elevation: unavailable'); }
+  } catch (e) { data.elev[inc.id] = false; setFeed('elev', 'warn', 'Fire elevation: unavailable'); }
+  render();
+}
+
+// ====================== MAP ======================
+let map, tileLayer, lyr = {};
+function initMap() {
+  map = L.map('map', { zoomSnap: 0.25, preferCanvas: false }).setView([45.29, -118.0], 7);
+  let saved = 'topo'; try { saved = localStorage.getItem('aab.basemap') || 'topo'; } catch (e) {}
+  if (!BASEMAPS[saved]) saved = 'topo';
+  $('basemap').innerHTML = Object.entries(BASEMAPS).map(([k, b]) => `<option value="${k}">${b[0]}</option>`).join('');
+  $('basemap').value = saved;
+  const setBase = k => { if (tileLayer) map.removeLayer(tileLayer); const b = BASEMAPS[k]; tileLayer = L.tileLayer(b[1], { maxZoom: 18, ...b[2] }).addTo(map); tileLayer.bringToBack(); };
+  setBase(saved);
+  $('basemap').addEventListener('change', e => { setBase(e.target.value); try { localStorage.setItem('aab.basemap', e.target.value); } catch (x) {} });
+  lyr.perim = L.layerGroup().addTo(map); lyr.ring = L.layerGroup().addTo(map); lyr.route = L.layerGroup().addTo(map); lyr.pts = L.layerGroup().addTo(map);
+  L.control.scale({ imperial: true, metric: false }).addTo(map);
+}
+let lastFit = '';
+function renderMap(a, list, inc, rec) {
+  if (!map) return;
+  lyr.ring.clearLayers(); lyr.route.clearLayers(); lyr.pts.clearLayers(); lyr.perim.clearLayers();
+  const circle = L.circle([a.lat, a.lon], { radius: state.radius * 1852, color: '#1d4f80', weight: 2, dashArray: '6 6', fill: false }).addTo(lyr.ring);
+  L.marker([a.lat, a.lon], { icon: L.divIcon({ className: '', html: '<div class="basemk"></div>', iconSize: [14, 14] }), zIndexOffset: 500 }).bindTooltip(a.id + ' · staffing base').addTo(lyr.ring);
+  const byId = {}; data.incidents.forEach(i => byId[i.id] = i);
+  if (data.perimGeo) {
+    L.geoJSON(data.perimGeo, {
+      filter: f => { const i = byId[irwin(f.properties.attr_IrwinID || f.properties.poly_IRWINID)]; return !i || state.filt[i.k]; },
+      style: f => { const i = byId[irwin(f.properties.attr_IrwinID || f.properties.poly_IRWINID)], c = i ? kindColor(i.k) : '#666';
+        return { color: c, weight: inc && i && i.id === inc.id ? 3 : 1.5, fillColor: c, fillOpacity: 0.25 }; },
+      onEachFeature: (f, l) => { const p = f.properties, t = p.poly_PolygonDateTime || p.poly_DateCurrent;
+        l.bindPopup(`<b>${esc(p.poly_IncidentName)}</b><br>${fmt(p.poly_GISAcres || 0)} ac mapped<br>Perimeter dated ${t ? new Date(t).toISOString().slice(0, 16).replace('T', ' ') + 'Z' : 'unknown'}`); },
+    }).addTo(lyr.perim);
+  }
+  list.forEach(i => {
+    const sel = inc && i.id === inc.id;
+    const m = L.marker([i.lat, i.lon], { icon: L.divIcon({ className: 'mk' + (sel ? ' sel' : ''), html: `<svg viewBox="-9 -9 18 18">${sym(i.k, 0, 0, 6)}</svg>`, iconSize: sel ? [26, 26] : [18, 18] }), zIndexOffset: sel ? 400 : 0 });
+    m.bindTooltip(`${esc(i.n)} · ${KINDS[i.k]} · ${fmt(i.ac || 0)} ac · ${Math.round(i.d)} nm`);
+    m.on('click', () => { state.inc = i.id; render(); });
+    m.addTo(lyr.pts);
+  });
+  if (inc) {
+    const pts = [[a.lat, a.lon], [inc.lat, inc.lon]];
+    L.polyline(pts, { color: '#c0392b', weight: 2.5 }).addTo(lyr.route);
+    if (rec && rec.id !== a.id) {
+      L.polyline([[inc.lat, inc.lon], [rec.lat, rec.lon]], { color: '#c0392b', weight: 2, dashArray: '5 6' }).addTo(lyr.route);
+      L.marker([rec.lat, rec.lon], { icon: L.divIcon({ className: '', html: '<div class="altmk"></div>', iconSize: [12, 12] }) }).bindTooltip(rec.id + ' · recovery airport').addTo(lyr.route);
+    }
+  }
+  const fitKey = a.id + '|' + state.radius;
+  if (fitKey !== lastFit) { lastFit = fitKey; map.fitBounds(circle.getBounds(), { padding: [10, 10] }); }
+}
+
+// ====================== RENDER ======================
+function pickRunway(a, o) {
+  const spd = o && o.ws ? Math.max(o.ws, o.g || 0) : 0, hasDir = o && o.wd !== null && spd > 0;
+  const ends = runwayEnds(a).map(e => { const ang = hasDir ? (o.wd - e.h) * rad : 0;
+    return { ...e, hw: hasDir ? spd * Math.cos(ang) : 0, xw: hasDir ? Math.abs(spd * Math.sin(ang)) : (o && o.vrb ? spd : 0), longest: e.len === a.rwy[0].len }; });
+  // Wind-favored end: most headwind. Under 7 kt the longest runway is assumed, using its better end.
+  const light = hasDir && spd < 7, pool = light ? ends.filter(e => e.r === a.rwy[0]) : ends;
+  const fav = hasDir ? pool.reduce((x, y) => y.hw > x.hw + 0.01 || (Math.abs(y.hw - x.hw) <= 0.01 && y.len > x.len) ? y : x) : ends[0];
+  const sel = ends.find(e => e.id === state.rwy) || fav;
+  const wtxt = e => !o ? 'no wind data' : !spd ? 'calm' : !hasDir ? 'variable ' + spd + ' kt' : (e.hw >= 0 ? 'HW ' : 'TW ') + Math.round(Math.abs(e.hw)) + ' / XW ' + Math.round(e.xw) + ' kt';
+  $('runway').innerHTML = ends.map(e => `<option value="${esc(e.id)}">${e === fav && hasDir ? '★ ' : ''}Rwy ${esc(e.id)} · ${fmt(e.len)} ft · ${wtxt(e)}${e === fav && hasDir ? ' · wind-favored' : ''}${e.longest ? ' · longest' : ''}</option>`).join('');
+  $('runway').value = sel.id;
+  const note = $('rwynote');
+  if (!hasDir) { note.className = 'rwynote off'; note.textContent = o ? 'Wind is calm or variable, so no runway is favored. Confirm with ATIS or CTAF.' : 'No wind data, so no runway is favored.'; }
+  else if (sel === fav) { note.className = 'rwynote fav'; note.textContent = light ? `★ Light wind: longest runway assumed (Rwy ${sel.id}). Confirm with ATIS or CTAF.` : `★ Rwy ${sel.id} is wind-favored (likely active). Confirm with ATIS or CTAF.`; }
+  else { note.className = 'rwynote off'; note.textContent = light ? `Light wind: Rwy ${fav.id} (longest) is the assumed runway.` : `Rwy ${sel.id} is not wind-favored. Rwy ${fav.id} is.`; }
+  // Layout from runway-end coordinates, scaled to fit.
+  const f = n => n.toFixed(1), cosl = Math.cos(a.lat * rad);
+  const seg = a.rwy.map(r => {
+    if (r.leLat != null && r.heLat != null) return { r, x1: (r.leLon - a.lon) * cosl * 60, y1: -(r.leLat - a.lat) * 60, x2: (r.heLon - a.lon) * cosl * 60, y2: -(r.heLat - a.lat) * 60 };
+    const h = (r.leH ?? (parseInt(r.le, 10) || 36) * 10) * rad, L = r.len / 6076 / 2;
+    return { r, x1: -Math.sin(h) * L, y1: Math.cos(h) * L, x2: Math.sin(h) * L, y2: -Math.cos(h) * L };
+  });
+  const xs = seg.flatMap(s => [s.x1, s.x2]), ys = seg.flatMap(s => [s.y1, s.y2]);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const half = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / 2 || 1, k = 42 / half;
+  let g = '<circle class="ring" r="68"/><text x="0" y="-74">N</text>';
+  seg.sort((p, q) => (p.r === sel.r) - (q.r === sel.r)).forEach(s => {
+    const X1 = (s.x1 - cx) * k, Y1 = (s.y1 - cy) * k, X2 = (s.x2 - cx) * k, Y2 = (s.y2 - cy) * k, on = s.r === sel.r;
+    const dx = X2 - X1, dy = Y2 - Y1, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+    g += `<line class="rw${on ? ' on' : ''}" x1="${f(X1)}" y1="${f(Y1)}" x2="${f(X2)}" y2="${f(Y2)}"/>`;
+    if (on) g += `<line class="cl" x1="${f(X1)}" y1="${f(Y1)}" x2="${f(X2)}" y2="${f(Y2)}"/>`;
+    g += `<text class="${on && sel.end === 'le' ? 'sel' : ''}" x="${f(X1 - ux * 11)}" y="${f(Y1 - uy * 11)}">${esc(s.r.le)}</text>`;
+    g += `<text class="${on && sel.end === 'he' ? 'sel' : ''}" x="${f(X2 + ux * 11)}" y="${f(Y2 + uy * 11)}">${esc(s.r.he)}</text>`;
+  });
+  if (hasDir) {
+    const wx = Math.sin(o.wd * rad), wy = -Math.cos(o.wd * rad), px = -wy, py = wx;
+    g += `<g class="wind"><title>Wind from ${p3(o.wd)}° at ${o.ws}${o.g ? ' gusting ' + o.g : ''} kt</title><line x1="${f(wx * 79)}" y1="${f(wy * 79)}" x2="${f(wx * 70)}" y2="${f(wy * 70)}"/>
+      <polygon points="${f(wx * 63)},${f(wy * 63)} ${f(wx * 71 + px * 4)},${f(wy * 71 + py * 4)} ${f(wx * 71 - px * 4)},${f(wy * 71 - py * 4)}"/></g>`;
+  }
+  $('rwyplot').innerHTML = g;
+  return { xw: sel.xw, hw: sel.hw, id: sel.id, len: sel.len, known: !!o };
+}
+
+function render() {
+  const a = airport(state.apt); if (!a) return;
+  const ac = AIRCRAFT.find(x => x.id === state.acft), o = data.wx, T = refTime(), tz = aptTz(a), replay = state.mode === 'replay';
+  $('today').textContent = new Date(briefYmd() + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) + (replay ? ' (replay)' : '');
+  $('mlive').setAttribute('aria-pressed', !replay); $('mreplay').setAttribute('aria-pressed', replay);
+  $('rdate').hidden = !replay; $('rdate').value = state.date;
+  $('replaynote').hidden = !replay;
+  if (replay) $('replaynote').textContent = `Replay of ${state.date}. Incidents, perimeters and weather are shown as of the planned launch time (${$('launch').value} local at ${a.id}). Change the launch time to move through the day.`;
+
+  // 1. Airport
+  const rw = pickRunway(a, o);
+  const da = o && o.t !== null ? densityAlt(a.elev, o.t, o.alt) : null, fc = o ? flightCat(o) : null;
+  $('metar').textContent = o ? o.raw : 'No observation available for ' + a.id + '.';
+  $('aptkv').innerHTML = `
+    <div><span>Flight category</span><b>${fc ? `<span class="fc ${fc}">${fc}</span>` : 'n/a'}</b></div>
+    <div><span>Field elevation</span><b>${fmt(a.elev)} ft</b></div>
+    <div><span>Density altitude</span><b>${da === null ? 'n/a' : fmt(da) + ' ft'}</b></div>
+    <div><span>Wind</span><b>${!o ? 'n/a' : !o.ws ? 'Calm' : (o.vrb ? 'VRB' : p3(o.wd) + '°') + ' ' + o.ws + (o.g ? ' G' + o.g : '') + ' kt'}</b></div>
+    <div><span>Rwy ${esc(rw.id)} head / xwind</span><b>${!o ? 'n/a' : (rw.hw >= 0 ? '' : 'TW ') + Math.round(Math.abs(rw.hw)) + ' / ' + Math.round(rw.xw) + ' kt'}</b></div>
+    <div><span>Observed</span><b>${o ? o.time.toISOString().slice(11, 16) + 'Z' : 'n/a'}</b></div>`;
+
+  // 2. Aircraft
+  $('acftkv').innerHTML = `
+    <div><span>Engines</span><b>${ac.eng}</b></div><div><span>Cabin</span><b>${ac.press}</b></div>
+    <div><span>Cruise</span><b>${ac.cruise} kt</b></div><div><span>Endurance</span><b>${ac.endur} h</b></div>
+    <div><span>SE ceiling</span><b>${fmt(ac.sece)} ft</b></div><div><span>Max demo xwind</span><b>${ac.xw} kt</b></div>`;
+
+  // 3. Radius
+  RADII.forEach(r => $('r' + r).setAttribute('aria-pressed', r === state.radius));
+
+  // 4. Incidents
+  const all = data.incidents.map(i => ({ ...i, d: distNm(a, i), b: bearing(a, i) })).filter(i => i.d <= state.radius + 0.5);
+  const list = all.filter(i => state.filt[i.k]).sort((x, y) => x.d - y.d);
+  if (!list.find(i => i.id === state.inc)) state.inc = null;
+  const counts = {}; all.forEach(i => counts[i.k] = (counts[i.k] || 0) + 1);
+  Object.keys(KINDS).forEach(k => { const el = $('cnt' + k); if (el) el.textContent = counts[k] || 0; });
+  const loading = (data.feeds.wfigs || {}).cls === 'load', failed = (data.feeds.wfigs || {}).cls === 'err';
+  $('inccount').textContent = loading ? '' : `${list.length} of ${all.length} incidents within ${state.radius} nm of ${a.id} shown, nearest first.`;
+  if (!loading) $('incidents').innerHTML = failed ? `<div class="empty">Incidents could not be loaded. <button type="button" class="btn sm" id="retry">Retry</button></div>`
+    : list.length ? list.map(i => {
+      const upd = replay ? (i.asOf ? 'perimeter ' + new Date(i.asOf).toISOString().slice(5, 10) : 'no perimeter yet') : (i.mod ? 'updated ' + ageText(T - i.mod) + ' ago' : '');
+      return `<label class="inc ${i.id === state.inc ? 'sel' : ''}">
+        <input type="radio" name="inc" value="${esc(i.id)}" ${i.id === state.inc ? 'checked' : ''}>
+        <span class="nm">${symIcon(i.k)} ${esc(i.n)} <span class="cx">${esc(cxLabel(i))}</span></span>
+        <span class="dist">${Math.round(i.d)} nm ${card(i.b)}</span>
+        <span class="meta">${i.ac != null ? fmt(i.ac) + ' ac' : 'size n/a'}${i.pct != null ? ' · ' + i.pct + '% contained' : ''} · ETE ${hrs(i.d / ac.cruise)}${upd ? ' · ' + upd : ''}${i.cpx ? ' · part of ' + esc(i.cpx) : ''}</span>
+      </label>`; }).join('')
+    : `<div class="empty">No incidents of the selected types within ${state.radius} nm${replay ? ' on this date' : ' right now'}. Widen the radius or tick more types${replay ? '' : ', or use Replay to load a past fire day'}.</div>`;
+  const r = $('retry'); if (r) r.addEventListener('click', loadIncidents);
+
+  const inc = list.find(i => i.id === state.inc) || null;
+  if (inc) loadElev(inc);
+
+  // Recovery airport options: staffing base, then nearest candidate bases to the fire.
+  const ref = inc || a;
+  const near = Object.keys(BASE_TZ).filter(id => id !== a.id && airport(id)).map(id => ({ id, d: distNm(ref, airport(id)) })).sort((x, y) => x.d - y.d).slice(0, 8);
+  if (!near.find(n => n.id === state.recover)) state.recover = '';
+  $('recover').innerHTML = `<option value="">${a.id} · staffing base</option>` + near.map(n => `<option value="${n.id}">${n.id} · ${esc(airport(n.id).city)} · ${Math.round(n.d)} nm from ${inc ? 'fire' : 'base'}</option>`).join('');
+  $('recover').value = state.recover;
+  $('recmodewrap').hidden = !state.recover;
+  const rec = state.recover ? airport(state.recover) : a;
+
+  renderMap(a, list, inc, rec);
+  renderBrief(a, ac, inc, { o, da, fc, rw }, all, rec, T, tz);
+}
+const ageText = ms => { const h = ms / 3600e3; return h < 1 ? Math.max(1, Math.round(h * 60)) + ' min' : h < 48 ? Math.round(h) + ' h' : Math.round(h / 24) + ' d'; };
+const cxLabel = i => i.k === 'IA' ? 'New start' : (i.lvl || i.org || 'Unassigned').replace(' Incident', '').replace('Complex Incident Management Team', 'CIMT');
+
+const MIT = {
+  fc: 'Check the TAF trend; consider delaying launch or another base.',
+  wind: 'Review the forecast for the launch and recovery windows.',
+  gust: 'Expect turbulence and wind shear on departure and over the fire; brief with the PIC.',
+  xw: 'Pick the most favorable runway; confirm against the aircraft limit with the PIC.',
+  tod: 'Confirm takeoff performance with the PIC; consider a lighter fuel load, a cooler launch time or another base.',
+  ceil: 'Confirm terrain clearance and an escape route below the cloud base.',
+  ts: 'Delay launch until the cell clears the airport.',
+  taf: 'Plan the recovery around the forecast; identify an alternate.',
+  tsfire: 'Expect outflow winds, lightning and erratic fire behavior; hold off or plan a standoff distance.',
+  da: 'Confirm single-engine performance at working altitude with the PIC.',
+  smoke: 'Increase vertical and horizontal separation; plan an exit route.',
+  day: 'Shorten time over fire or move the launch earlier.',
+  acount: 'Limit the number of aircraft in the operating area; consider an ASM or second ATGS.',
+  near: 'Confirm boundaries and frequencies for adjacent incidents and TFRs.',
+  apt: 'Coordinate with the airport or ATC; watch for non-incident traffic.',
+  mission: 'Brief low-level hazards and the CFIT plan.',
+  duty: 'Confirm duty limits with the vendor; plan a relief crew.',
+  ftime: 'Confirm daily flight-time limits; plan a relief aircraft.',
+  crew: 'Pair with an experienced crew or get a local area brief.',
+  endur: 'Reduce planned time over fire or plan a fuel stop closer to the fire.',
+  jur: 'Get the local aviation brief and frequency plan from dispatch.',
+};
+
+function renderBrief(a, ac, inc, wx, all, rec, T, tz) {
+  const tbody = $('factors').querySelector('tbody'), route = $('route');
+  if (!inc) {
+    $('band').className = 'band none';
+    $('band').innerHTML = '<div class="lbl">Overall risk</div><div class="lvl">Select an incident</div><div class="rule">Pick an incident from the list or the map to build the brief.</div>';
+    $('stops').innerHTML = ''; route.innerHTML = '<div><span>Status</span><b>No incident selected</b></div>'; tbody.innerHTML = ''; window.briefText = '';
+    return;
+  }
+  const v = id => $(id).value, o = wx.o, mission = v('mission'), workAgl = WORK_AGL[mission];
+  const launch = toMin(v('launch')), dutyStart = toMin(v('duty'));
+  const onscene = Math.max(0, +v('onscene') || 0), flown = Math.max(0, +v('flown') || 0);
+  const recOther = rec.id !== a.id, recMode = recOther ? v('recmode') : 'home';
+  const eteOut = inc.d / ac.cruise, eteBack = distNm(inc, rec) / ac.cruise, eteHome = recMode === 'refuel' ? distNm(rec, a) / ac.cruise : 0;
+  const onStart = launch + eteOut * 60, onEnd = onStart + onscene * 60, landRec = onEnd + eteBack * 60;
+  const dayEnd = recMode === 'refuel' ? landRec + 30 + eteHome * 60 : landRec;
+  const sunset = localMinutes(sunsetUTC(briefYmd(), a.lat, a.lon), tz), legalEnd = sunset + 30, dayMargin = legalEnd - onEnd;
+  const fuelNeed = eteOut + onscene + eteBack + RESERVE_H, maxOn = Math.max(0, ac.endur - eteOut - eteBack - RESERVE_H);
+  const dutyLen = (dayEnd + 30 - dutyStart) / 60, flightToday = flown + eteOut + onscene + eteBack + eteHome;
+  const fireEl = data.elev[inc.id], hasEl = typeof fireEl === 'number';
+
+  route.innerHTML = `
+    <div><span>Distance / bearing</span><b>${Math.round(inc.d)} nm · ${p3(inc.b)}°</b></div>
+    <div><span>ETE to fire</span><b>${hrs(eteOut)}</b></div>
+    <div><span>Over fire</span><b>${hhmm(onStart)}–${hhmm(onEnd)}</b></div>
+    <div><span>Max time over fire</span><b>${hrs(maxOn)}</b></div>
+    <div><span>Land ${esc(rec.id)}</span><b>${hhmm(landRec)}</b></div>
+    ${recMode === 'refuel' ? `<div><span>Back at ${esc(a.id)}</span><b>${hhmm(dayEnd)}</b></div>` : ''}
+    <div><span>Sunset (${esc(a.id)})</span><b>${hhmm(sunset)}</b></div>
+    <div><span>Legal end (+30)</span><b>${hhmm(legalEnd)}</b></div>
+    <div><span>Fire elevation</span><b>${hasEl ? fmt(fireEl) + ' ft' : fireEl === false ? 'n/a' : '…'}</b></div>
+    <div><span>Working altitude</span><b>${hasEl ? fmt(fireEl + workAgl) + ' ft' : workAgl + ' AGL'}</b></div>
+    <div><span>Projected duty</span><b>${dutyLen.toFixed(1)} h</b></div>
+    <div><span>Flight time today</span><b>${flightToday.toFixed(1)} h</b></div>`;
+
+  const F = [], add = (cat, key, name, value, lvl, src) => F.push({ cat, key, name, value, lvl, src });
+  const wsrc = state.mode === 'replay' ? 'Archived METAR' : 'METAR';
+  // ---- Medium (environment)
+  if (o) {
+    add('Medium', 'fc', 'Base flight category', `${wx.fc}${o.vis != null ? ' · vis ' + o.vis + ' sm' : ''}${o.fu ? ' · smoke' : o.hz ? ' · haze' : ''}`, { VFR:0, MVFR:1, IFR:2, LIFR:3 }[wx.fc], wsrc);
+    const spread = o.g ? o.g - o.ws : 0;
+    add('Medium', 'wind', 'Wind at base', o.ws ? `${o.vrb ? 'Variable' : p3(o.wd) + '°'} at ${o.ws} kt` : 'Calm', o.ws >= 25 ? 2 : o.ws >= 15 ? 1 : 0, wsrc);
+    add('Medium', 'gust', 'Gusts at base', o.g ? `G${o.g} kt · spread ${spread} kt` : 'None reported', o.g >= 30 || spread >= 15 ? 2 : o.g >= 20 || spread >= 10 ? 1 : 0, wsrc);
+    add('Medium', 'xw', 'Crosswind, selected runway (with gusts)', `${Math.round(wx.rw.xw)} kt rwy ${wx.rw.id} / limit ${ac.xw}${wx.rw.hw < -3 ? ' · tailwind ' + Math.round(-wx.rw.hw) + ' kt' : ''}`,
+      wx.rw.xw > ac.xw ? 2 : wx.rw.xw > ac.xw * 0.75 || wx.rw.hw < -5 ? 1 : 0, wsrc + ' + runway data');
+    if (wx.da !== null) {
+      const need = Math.round(ac.tod * Math.pow(1.10, Math.max(0, wx.da) / 1000) / 50) * 50, pct = need / wx.rw.len;
+      add('Medium', 'tod', 'Takeoff distance vs selected runway', `DA ${fmt(wx.da)} ft · ~${fmt(need)} of ${fmt(wx.rw.len)} ft`, pct > 0.85 ? 2 : pct > 0.6 ? 1 : 0, wsrc + ' + profile (rule of thumb)');
+    }
+    add('Medium', 'ts', 'Thunderstorms at base', o.ts === 'TS' ? 'TS at the airport' : o.ts === 'VCTS' ? 'VCTS (in the vicinity)' : o.ltg ? 'Lightning in remarks' : 'None reported', o.ts === 'TS' ? 3 : o.ts === 'VCTS' ? 2 : o.ltg ? 1 : 0, wsrc);
+    if (hasEl) {
+      const cloud = o.ceil != null ? a.elev + o.ceil : null, clr = cloud === null ? null : cloud - (fireEl + workAgl);
+      add('Medium', 'ceil', 'Ceiling vs working altitude at fire', clr === null ? 'No ceiling reported at base' : `base ${fmt(cloud)} ft MSL · ${clr >= 0 ? fmt(clr) + ' ft above' : fmt(-clr) + ' ft below'} working altitude`,
+        clr === null ? 0 : clr < 500 ? 2 : clr < 2000 ? 1 : 0, wsrc + ' at base + USGS elevation');
+      if (o.t !== null) {
+        const tWork = o.t - 2 * (fireEl + workAgl - a.elev) / 1000, daWork = densityAlt(fireEl + workAgl, tWork, o.alt), mar = ac.sece - daWork;
+        add('Medium', 'da', 'Density altitude at working altitude vs SE ceiling', `DA ${fmt(daWork)} ft · margin ${fmt(mar)} ft`, mar < 2000 ? 2 : mar < 4000 ? 1 : 0, wsrc + ' + USGS elevation');
+      }
+    } else {
+      add('Medium', null, 'Ceiling vs working altitude at fire', fireEl === false ? 'Fire elevation unavailable' : 'Loading fire elevation…', null, 'USGS elevation');
+      add('Medium', null, 'Density altitude at working altitude', fireEl === false ? 'Fire elevation unavailable' : 'Loading fire elevation…', null, 'USGS elevation');
+    }
+  } else add('Medium', null, 'Airport weather (wind, gusts, ceiling, visibility, thunderstorms)', 'No observation available', null, wsrc);
+  if (state.mode === 'live') {
+    if (data.taf) {
+      const t0 = zonedToUtc(briefYmd(), launch, tz), t1 = new Date(+t0 + (dayEnd - launch) * 60e3);
+      const per = data.taf.filter(p => { const s = new Date(p.utc_valid), e = p.utc_end_valid ? new Date(p.utc_end_valid) : new Date(p.utc_taf_expire); return s <= t1 && e >= t0; });
+      const tsP = per.some(p => (p.presentwx || []).some(w => /TS/.test(w))), gmax = Math.max(0, ...per.map(p => p.gust || 0));
+      const cmin = Math.min(99999, ...per.flatMap(p => (p.skyc || []).map((c, i) => /BKN|OVC|VV/.test(c) ? p.skyl[i] : 99999))), vmin = Math.min(99, ...per.map(p => p.visibility ?? 99));
+      const worstCat = flightCat({ ceil: cmin === 99999 ? null : cmin, vis: vmin });
+      add('Medium', 'taf', 'Forecast for the mission window', `${tsP ? 'Thunderstorms forecast · ' : ''}${worstCat}${gmax ? ' · gusts to ' + gmax + ' kt' : ''}`, tsP ? 2 : Math.max({ VFR:0, MVFR:1, IFR:2, LIFR:3 }[worstCat], gmax >= 30 ? 2 : gmax >= 20 ? 1 : 0), 'TAF');
+    } else add('Medium', null, 'Forecast for the mission window', 'No TAF for this airport', null, 'TAF');
+  }
+  const smoke = +v('smoke'), tsf = +v('tsfire');
+  add('Medium', 'smoke', 'Visibility over fire (smoke or cloud)', ['Good', 'Reduced', 'Poor (< 3 sm)'][smoke], smoke, 'Crew input');
+  add('Medium', 'tsfire', 'Thunderstorms near fire', { 0:'None', 1:'Forecast or building', 3:'Active within 20 nm' }[tsf], tsf, 'Crew input');
+  add('Medium', 'day', 'Daylight at end of time over fire', `${dayMargin >= 0 ? Math.round(dayMargin) + ' min before' : Math.round(-dayMargin) + ' min past'} legal end`, dayMargin < 0 ? 3 : dayMargin < 60 ? 2 : 0, 'Computed sunset at ' + a.id);
+  add('Medium', null, 'Route weather (G-AIRMET, SIGMET, CWA)', 'Not connected', null, 'Build 2');
+  add('Medium', 'notam', 'NOTAMs, base and fire area', $('notamok').checked ? 'Checked' : 'Not checked', $('notamok').checked ? 0 : -2, 'Crew check');
+  // ---- Mission
+  const acount = Math.max(0, +v('acount') || 0), others = all.filter(i => i.id !== inc.id && distNm(inc, i) <= 25).length;
+  let nearApt = null; Object.values(data.airports).forEach(p => { const d = distNm(p, inc); if (!nearApt || d < nearApt.d) nearApt = { d, id: p.id }; });
+  add('Mission', 'cx', 'Incident complexity', `${cxLabel(inc)} · ${inc.ac != null ? fmt(inc.ac) + ' ac' : 'size n/a'}${inc.pct != null ? ' · ' + inc.pct + '%' : ''}`, -1, 'WFIGS');
+  add('Mission', 'acount', 'Aircraft over fire', `${acount}`, acount >= 8 ? 2 : acount >= 4 ? 1 : 0, 'Crew input');
+  add('Mission', 'near', 'Other incidents within 25 nm', `${others}`, others >= 3 ? 2 : others >= 1 ? 1 : 0, 'WFIGS');
+  add('Mission', 'apt', 'Fire near an airport', `${nearApt.d.toFixed(0)} nm to ${nearApt.id}`, nearApt.d <= 5 ? 2 : nearApt.d <= 10 ? 1 : 0, 'Airport data (4,000 ft+ paved)');
+  add('Mission', 'mission', 'Mission type', { ATGS:'ATGS orbit', ASM:'ASM low-level', LEAD:'Lead low-level', RECON:'Recon / IAA' }[mission], mission === 'ASM' || mission === 'LEAD' ? 1 : 0, 'Crew input');
+  add('Mission', 'tfr', 'TFRs, fire area and route', $('tfrok').checked ? 'Checked' : 'Not checked', $('tfrok').checked ? 0 : -2, 'Crew check (feed in build 2)');
+  add('Mission', 'mil', 'Military airspace deconfliction', $('milok').checked ? 'Confirmed with dispatch' : 'Not confirmed', $('milok').checked ? 0 : -2, 'Crew check (geometry in build 2)');
+  // ---- Member, Machine, Management
+  const crewFlags = ($('trainee').checked ? 1 : 0) + ($('unfamiliar').checked ? 1 : 0);
+  add('Member', 'duty', 'Projected duty day', `${dutyLen.toFixed(1)} h of 14`, dutyLen > 14 ? 3 : dutyLen > 12 ? 2 : dutyLen > 10 ? 1 : 0, 'Crew input');
+  add('Member', 'ftime', 'Flight time today', `${flightToday.toFixed(1)} h of 8`, flightToday > 8 ? 3 : flightToday > 6.5 ? 1 : 0, 'Crew input');
+  add('Member', 'crew', 'Trainee / area familiarity', crewFlags === 0 ? 'Neither' : [$('trainee').checked && 'Trainee', $('unfamiliar').checked && 'Unfamiliar'].filter(Boolean).join(' + '), crewFlags, 'Crew input');
+  add('Machine', 'endur', 'Endurance vs plan', `needs ${fuelNeed.toFixed(1)} h of ${ac.endur} (incl. ${RESERVE_H} h reserve)${recOther ? ' landing ' + rec.id : ''}`, fuelNeed > ac.endur ? 2 : ac.endur - fuelNeed < 0.5 ? 1 : 0, 'Aircraft profile (placeholder)');
+  add('Machine', null, 'Aircraft capability', `${ac.eng} · ${ac.press}`, 0, 'Aircraft profile (placeholder)');
+  add('Management', 'jur', 'New dispatch center / jurisdiction', $('newjur').checked ? 'Yes' : 'No', $('newjur').checked ? 1 : 0, 'Crew input');
+
+  // Hard limits
+  const stops = [];
+  if (dayMargin < 0) stops.push(`<b>Daylight:</b> time over fire runs ${Math.round(-dayMargin)} min past 30 min after sunset.`);
+  if (dutyLen > 14) stops.push(`<b>Duty:</b> projected ${dutyLen.toFixed(1)} h exceeds the 14 h duty day.`);
+  if (flightToday > 8) stops.push(`<b>Flight time:</b> projected ${flightToday.toFixed(1)} h exceeds 8 h daily mission flight time.`);
+  $('stops').innerHTML = stops.map(s => `<div class="stop">${s}</div>`).join('');
+
+  // Aggregate: worst factor sets the floor. Hard-limit factors show in the banner and count as High in the band.
+  const rated = F.filter(f => f.lvl !== null && f.lvl >= 0 && f.key);
+  let worst = Math.max(0, ...rated.map(f => f.lvl === 3 && ['day', 'duty', 'ftime'].includes(f.key) ? 2 : f.lvl));
+  const below = rated.filter(f => f.lvl === worst - 1).length;
+  let bumped = false;
+  if (worst === 2 && below >= 3) { worst++; bumped = true; }
+  const drivers = [...rated].sort((x, y) => y.lvl - x.lvl).filter(f => f.lvl > 0).slice(0, 3);
+  $('band').className = 'band l' + worst;
+  $('band').innerHTML = `<div class="lbl">Overall risk · ${esc(inc.n)}</div><div class="lvl">${LEVELS[worst]}</div>
+    ${drivers.length ? '<ol>' + drivers.map(d => `<li>${d.name}: <span class="mono">${esc(d.value)}</span></li>`).join('') + '</ol>' : '<div class="rule">No elevated factors from connected data.</div>'}
+    <div class="rule">${bumped ? 'Raised one level: three or more factors just below the highest. ' : ''}${F.filter(f => f.lvl === null).length} factors pending data. ${F.filter(f => f.lvl === -2).length} crew checks open.</div>`;
+
+  const tag = f => f.lvl === null ? 'pending' : f.lvl === -1 ? 'unrated' : f.lvl === -2 ? 'CONFIRM' : LEVELS[f.lvl];
+  let rows = '', cat = '';
+  F.forEach(f => {
+    if (f.cat !== cat) { cat = f.cat; rows += `<tr class="grp"><td colspan="4">${cat}</td></tr>`; }
+    const pill = f.lvl === null ? '<span class="pill pend">Pending</span>' : f.lvl === -1 ? '<span class="pill pend">Unrated</span>' : f.lvl === -2 ? '<span class="pill l1">Confirm</span>' : `<span class="pill l${f.lvl}">${LEVELS[f.lvl]}</span>`;
+    rows += `<tr><td>${f.name}${f.lvl >= 1 && MIT[f.key] ? `<div class="mit">${MIT[f.key]}</div>` : ''}</td><td class="val">${esc(f.value)}</td><td>${pill}</td><td class="src">${f.src}</td></tr>`;
+  });
+  tbody.innerHTML = rows;
+
+  let txt = `AIR ATTACK RISK BRIEF ${briefYmd()}${state.mode === 'replay' ? ' (REPLAY)' : ''}\n`;
+  txt += `Base ${a.id} rwy ${wx.rw.id} | ${ac.name} | ${inc.n} ${Math.round(inc.d)} nm ${p3(inc.b)} | launch ${hhmm(launch)} | land ${rec.id}\n`;
+  if (o) txt += `METAR ${o.raw}\n`;
+  txt += `Overall: ${LEVELS[worst]}\n`;
+  stops.forEach(x => txt += 'HARD LIMIT: ' + x.replace(/<[^>]+>/g, '') + '\n');
+  cat = '';
+  F.forEach(f => { if (f.cat !== cat) { cat = f.cat; txt += `\n${cat.toUpperCase()}\n`; } txt += `- ${f.name}: ${f.value} [${tag(f)}]\n`; });
+  window.briefText = txt;
+}
+
+// ====================== INIT ======================
+let reloadTimer;
+const reloadAll = () => { state.inc = null; loadWx(); loadIncidents(); };
+function setAirport(id) { state.apt = id; state.rwy = null; state.recover = ''; reloadAll(); }
+
+async function init() {
+  renderFeeds();
+  let j;
+  try { j = await getJson('data/airports.json'); }
+  catch (e) { document.querySelector('.grid').innerHTML = '<div class="card">Could not load data/airports.json (' + esc(e.message) + '). The page must be opened from a web server such as GitHub Pages, not as a local file.</div>'; return; }
+  j.airports.forEach(r => data.airports[r[0]] = { id: r[0], name: r[1], city: r[2], st: r[3], lat: r[4], lon: r[5], elev: r[6],
+    rwy: r[7].map(x => ({ le: x[0], he: x[1], len: x[2], wid: x[3], surf: x[4], leLat: x[5], leLon: x[6], heLat: x[7], heLon: x[8], leH: x[9], heH: x[10] })) });
+
+  $('airport').innerHTML = Object.values(BASES).map(([label, ids]) => `<optgroup label="${label}">` + Object.keys(ids).filter(airport).map(id => `<option value="${id}">${id} · ${esc(airport(id).city)}, ${airport(id).st}</option>`).join('') + '</optgroup>').join('')
+    + '<optgroup label="Other" id="otheropt"></optgroup>';
+  $('aptlist').innerHTML = Object.values(data.airports).map(p => `<option value="${p.id}">${esc(p.city)}, ${p.st} · ${esc(p.name)}</option>`).join('');
+  $('aircraft').innerHTML = AIRCRAFT.map(x => `<option value="${x.id}">${x.name}</option>`).join('');
+  $('radius').innerHTML = RADII.map(r => `<button type="button" data-r="${r}" id="r${r}">${r}</button>`).join('');
+  $('filt').innerHTML = Object.entries(KINDS).map(([k, l]) => `<label><input type="checkbox" id="f${k}" data-k="${k}" checked>${symIcon(k)}<span>${l} (<span id="cnt${k}">0</span>)</span></label>`).join('');
+  $('legend').innerHTML = Object.entries(KINDS).map(([k, l]) => `<span>${symIcon(k)}${l}</span>`).join('') + '<span>◆ staffing base</span><span>Shaded areas are mapped perimeters</span>';
+  $('airport').value = state.apt; $('aircraft').value = state.acft;
+
+  $('airport').addEventListener('change', e => { $('otherapt').value = ''; setAirport(e.target.value); });
+  $('otherapt').addEventListener('change', e => {
+    const q = e.target.value.trim().toUpperCase(); if (!q) return;
+    const hit = airport(q) || airport('K' + q) || Object.values(data.airports).find(p => p.city.toUpperCase() === q);
+    if (!hit) { e.target.value = ''; e.target.placeholder = 'Not found: ' + q; return; }
+    if (!BASE_TZ[hit.id]) { $('otheropt').innerHTML = `<option value="${hit.id}">${hit.id} · ${esc(hit.city)}, ${hit.st}</option>`; }
+    $('airport').value = hit.id; e.target.value = ''; e.target.placeholder = 'e.g. KJSY or Joseph'; setAirport(hit.id);
+  });
+  $('runway').addEventListener('change', e => { state.rwy = e.target.value; render(); });
+  $('aircraft').addEventListener('change', e => { state.acft = e.target.value; render(); });
+  $('radius').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.radius = +b.dataset.r; state.inc = null; loadIncidents(); render(); });
+  $('filt').addEventListener('change', e => { const k = e.target.dataset.k; if (k) { state.filt[k] = e.target.checked; render(); } });
+  $('incidents').addEventListener('change', e => { if (e.target.name === 'inc') { state.inc = e.target.value; render(); } });
+  $('recover').addEventListener('change', e => { state.recover = e.target.value; render(); });
+  ['mission', 'onscene', 'duty', 'flown', 'acount', 'smoke', 'tsfire', 'trainee', 'unfamiliar', 'newjur', 'milok', 'notamok', 'tfrok', 'recmode'].forEach(id => $(id).addEventListener('input', render));
+  $('launch').addEventListener('input', () => { render(); if (state.mode === 'replay') { clearTimeout(reloadTimer); reloadTimer = setTimeout(reloadAll, 700); } });
+  $('mode').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.dataset.m === state.mode) return; state.mode = b.dataset.m; reloadAll(); render(); });
+  $('rdate').addEventListener('change', e => { if (e.target.value) { state.date = e.target.value; reloadAll(); render(); } });
+  $('testcase').addEventListener('click', () => { state.mode = 'replay'; state.date = '2026-07-25'; $('launch').value = '13:00'; reloadAll(); render(); });
+  $('copy').addEventListener('click', () => {
+    const t = window.briefText || '', btn = $('copy');
+    const fallback = () => { const ta = $('brieftext'); ta.value = t; ta.hidden = false; ta.focus(); ta.select(); };
+    try { navigator.clipboard.writeText(t).then(() => { btn.textContent = 'Copied'; setTimeout(() => btn.textContent = 'Copy brief', 1500); }).catch(fallback); } catch (e) { fallback(); }
+  });
+
+  if (window.L) initMap(); else $('map').innerHTML = '<div class="empty" style="margin:12px">The map library could not be loaded. The brief still works without it.</div>';
+  render();
+  reloadAll();
+}
+init();
+</script>
+</body>
+</html>
