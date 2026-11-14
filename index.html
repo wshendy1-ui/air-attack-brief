@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
-/* Build 1. Inputs in flow order on the left, map and brief on the right; stacks on phones. */
+/* Build 1.1. Inputs in flow order on the left, map and brief on the right; stacks on phones. */
 :root {
   --bg: #eef1f4; --panel: #ffffff; --ink: #17212c; --muted: #5a6877; --line: #d3dae2;
   --accent: #1d4f80; --accent-soft: #e2ebf5; --sample: #8a5a00; --sample-bg: #fff3d6;
@@ -107,6 +107,12 @@ svg.sym { width: 14px; height: 14px; flex: none; vertical-align: -2px; }
 .filt input { accent-color: var(--accent); margin: 0; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin-top: 8px; }
 .legend span { display: inline-flex; align-items: center; gap: 4px; }
+.al { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.al.rfw { background: var(--r2bg); color: var(--r2); } .al.fww { background: var(--r1bg); color: var(--r1); }
+.sw { display: inline-block; width: 14px; height: 10px; border: 1.5px solid; border-radius: 2px; }
+.sw.rfw { background: rgba(208, 2, 27, .25); border-color: #d0021b; } .sw.fww { background: rgba(245, 166, 35, .3); border-color: #c77d00; } .sw.fwz { border-color: #6c7a89; border-style: dashed; }
+.zonept { width: 18px; height: 18px; border: 3px solid #111; border-radius: 50%; background: rgba(255,255,255,.7); box-shadow: 0 0 0 2px #fff; }
+.maphead .right { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 /* Brief */
 .band { border-radius: 8px; padding: 14px 16px; border: 1px solid; }
 .band.l0 { background: var(--r0bg); border-color: var(--r0); } .band.l1 { background: var(--r1bg); border-color: var(--r1); }
@@ -213,10 +219,21 @@ details ul { padding-left: 18px; }
       </section>
 
       <section class="card">
-        <div class="step"><span class="n">4</span><h2>Incident</h2></div>
-        <div class="filt" id="filt" role="group" aria-label="Incident types to show"></div>
-        <div class="hint" id="inccount"></div>
-        <div class="inc-list" id="incidents" role="radiogroup" aria-label="Incidents within radius"></div>
+        <div class="step"><span class="n">4</span><h2>Incident or zone</h2></div>
+        <div class="seg" id="view" role="group" aria-label="List to show" style="margin-bottom:10px">
+          <button type="button" data-v="inc" id="vinc">Incidents</button>
+          <button type="button" data-v="zone" id="vzone">Fire weather zones</button>
+        </div>
+        <div id="incpane">
+          <div class="filt" id="filt" role="group" aria-label="Incident types to show"></div>
+          <div class="hint" id="inccount"></div>
+          <div class="inc-list" id="incidents" role="radiogroup" aria-label="Incidents within radius"></div>
+        </div>
+        <div id="zonepane" hidden>
+          <div class="hint" style="margin-top:0">Pick a zone to run a standby brief to its center, for a fire that hasn't started yet. Click inside the selected zone on the map to move the point.</div>
+          <div class="hint" id="zonecount"></div>
+          <div class="inc-list" id="zones" role="radiogroup" aria-label="Fire weather zones within radius"></div>
+        </div>
       </section>
 
       <section class="card">
@@ -258,7 +275,8 @@ details ul { padding-left: 18px; }
       <section class="card">
         <div class="maphead">
           <h3 style="font-size:18px">Map</h3>
-          <select id="basemap" aria-label="Basemap"></select>
+          <div class="right"><label class="check"><input type="checkbox" id="zonetoggle" checked> Fire weather zones</label>
+          <select id="basemap" aria-label="Basemap"></select></div>
         </div>
         <div id="map"></div>
         <div class="legend" id="legend"></div>
@@ -290,6 +308,8 @@ details ul { padding-left: 18px; }
             <li><b>Airport weather:</b> METARs and TAFs from the Iowa Environmental Mesonet, which mirrors National Weather Service data. Always confirm with an official briefing.</li>
             <li><b>Airports and runways:</b> OurAirports (public domain), filtered to US airports with a hard-surfaced runway of 4,000 ft or more. Runway headings are true, matching METAR wind directions.</li>
             <li><b>Terrain elevation at the fire:</b> USGS Elevation Point Query Service.</li>
+            <li><b>Fire weather zones:</b> outlines from the NOAA/NWS reference map service. Red Flag Warnings and Fire Weather Watches come from the NWS alerts feed in Live mode and the Iowa Environmental Mesonet warning archive in Replay. Start counts are every WFIGS wildfire discovered in the zone in the last 24 and 48 hours, including fires already out.</li>
+            <li><b>Flight times:</b> the first 10 minutes after takeoff and the last 10 minutes before landing are figured at 70% of cruise speed to allow for climb and descent.</li>
             <li><b>Replay mode:</b> incident points and day-by-day perimeters come from the WFIGS year-to-date services. Acres follow the perimeter mapped on or before the replay time. Complexity level reflects the incident's latest record, and containment for that day is not available.</li>
             <li><b>Not connected yet:</b> TFRs, route weather advisories (G-AIRMET, SIGMET, CWA), and SUA/MTR geometry. NOTAMs, TFRs and military airspace are manual checks.</li>
           </ul>
@@ -306,6 +326,8 @@ details ul { padding-left: 18px; }
 const ARC = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services';
 const IEM = 'https://mesonet.agron.iastate.edu';
 const EPQS = 'https://epqs.nationalmap.gov/v1/json';
+const NWSZONES = 'https://mapservices.weather.noaa.gov/static/rest/services/nws_reference_maps/nws_reference_map/MapServer/9/query';
+const NWSAPI = 'https://api.weather.gov';
 
 // Candidate ATGS bases (unverified starter list) with GACC and time zone.
 const BASES = {
@@ -335,6 +357,7 @@ const AIRCRAFT = [
   { id:'BE20',  name:'King Air 200', eng:'Twin turbine', press:'Pressurized', cruise:270, endur:5.0, sece:13000, xw:20, tod:2600 },
 ];
 const RESERVE_H = 0.75;          // fuel reserve held back (placeholder)
+const CLIMB_MIN = 10, DESC_MIN = 10, SLOW_FRAC = 0.7;   // climb and descent allowance: minutes flown at a fraction of cruise
 const WORK_AGL = { ATGS:2500, RECON:2500, ASM:1000, LEAD:1000 };
 const RADII = [50, 100, 150, 200, 250, 300];
 const LEVELS = ['Low', 'Moderate', 'High', 'Extremely High'];
@@ -347,9 +370,9 @@ const BASEMAPS = {
   dark: ['Carto Dark', 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxNativeZoom:19, attribution:'&copy; OpenStreetMap contributors &copy; CARTO' }],
 };
 
-const state = { mode:'live', date:'2026-07-25', apt:'KLGD', rwy:null, acft:'AC690', radius:100, inc:null, recover:'',
+const state = { mode:'live', date:'2026-07-25', apt:'KLGD', rwy:null, acft:'AC690', radius:100, inc:null, zone:null, zpt:null, view:'inc', showZones:true, recover:'',
   filt:{ CIMT:true, T3:true, T4:true, IA:true } };
-const data = { airports:{}, incidents:[], perims:{}, wx:null, taf:null, elev:{}, feeds:{}, loadSeq:0, wxSeq:0 };
+const data = { airports:{}, incidents:[], perims:{}, wx:null, taf:null, elev:{}, feeds:{}, loadSeq:0, wxSeq:0, zones:[], zoneGeo:null, zoneKey:'', zoneSeq:0 };
 
 // ====================== HELPERS ======================
 const $ = id => document.getElementById(id);
@@ -371,6 +394,23 @@ function bearing(a, b) {
   const x = Math.cos(a.lat * rad) * Math.sin(b.lat * rad) - Math.sin(a.lat * rad) * Math.cos(b.lat * rad) * Math.cos((b.lon - a.lon) * rad);
   return (Math.atan2(y, x) / rad + 360) % 360;
 }
+// Flight time for one leg, in hours. Climb after a takeoff and descent before a landing are flown at a fraction of cruise.
+function leg(d, ac, takeoff, landing) {
+  const slowH = ((takeoff ? CLIMB_MIN : 0) + (landing ? DESC_MIN : 0)) / 60, slowD = SLOW_FRAC * ac.cruise * slowH;
+  return d >= slowD ? slowH + (d - slowD) / ac.cruise : d / (SLOW_FRAC * ac.cruise);
+}
+// Point-in-polygon for GeoJSON Polygon and MultiPolygon (even-odd rule).
+function inGeom(lon, lat, g) {
+  if (!g) return false;
+  const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+  let inside = false;
+  for (const poly of polys) for (const ring of poly) for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+    if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+const findZone = p => data.zones.find(z => p.lon >= z.bb[0] && p.lon <= z.bb[2] && p.lat >= z.bb[1] && p.lat <= z.bb[3] && inGeom(p.lon, p.lat, z.geom)) || null;
 // --- time zones
 function tzParts(date, tz) {
   const p = {}; new Intl.DateTimeFormat('en-US', { timeZone: tz, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23' })
@@ -378,6 +418,7 @@ function tzParts(date, tz) {
   return p;
 }
 const localMinutes = (date, tz) => { const p = tzParts(date, tz); return +p.hour * 60 + +p.minute; };
+const localStamp = (date, tz, ymd) => { const p = tzParts(date, tz), d = `${p.year}-${p.month}-${p.day}`; return (d === ymd ? '' : `${+p.month}/${+p.day} `) + p.hour + p.minute; };
 const localYmd = (date, tz) => { const p = tzParts(date, tz); return `${p.year}-${p.month}-${p.day}`; };
 function zonedToUtc(ymd, minutes, tz) {
   const [y, m, d] = ymd.split('-').map(Number);
@@ -458,7 +499,7 @@ const kindColor = k => getComputedStyle(document.documentElement).getPropertyVal
 // ====================== DATA LOADING ======================
 function setFeed(key, cls, text) { data.feeds[key] = { cls, text }; renderFeeds(); }
 function renderFeeds() {
-  const order = ['wfigs', 'perim', 'metar', 'taf', 'elev'];
+  const order = ['wfigs', 'perim', 'metar', 'taf', 'elev', 'zones', 'alerts', 'starts'];
   const fixed = [['', 'TFRs: manual check'], ['', 'G-AIRMET / SIGMET / CWA: not connected'], ['', 'SUA / MTR: manual check'], ['', 'NOTAMs: manual check']];
   $('feeds').innerHTML = order.filter(k => data.feeds[k]).map(k => `<span class="chip ${data.feeds[k].cls}"><span class="dot"></span>${esc(data.feeds[k].text)}</span>`).join('')
     + fixed.map(f => `<span class="chip"><span class="dot"></span>${f[1]}</span>`).join('');
@@ -599,6 +640,69 @@ async function loadWx() {
   render();
 }
 
+// Fire weather zones in range, their warnings and watches, and new-start counts.
+async function loadZones() {
+  const seq = ++data.zoneSeq, a = airport(state.apt), T = refTime(), replay = state.mode === 'replay', key = a.id + '|' + state.radius;
+  if (data.zoneKey !== key) {
+    data.zones = []; data.zoneGeo = null; data.zoneKey = '';
+    setFeed('zones', 'load', 'Fire wx zones: loading…');
+    try {
+      const geo = await getJson(NWSZONES + '?' + new URLSearchParams({ f: 'geojson', where: '1=1', geometry: `${a.lon},${a.lat}`, geometryType: 'esriGeometryPoint', inSR: '4326',
+        spatialRel: 'esriSpatialRelIntersects', distance: state.radius, units: 'esriSRUnit_NauticalMile', outFields: 'state,zone,cwa,name,lon,lat', maxAllowableOffset: '0.005', geometryPrecision: '3' }));
+      if (seq !== data.zoneSeq) return;
+      data.zones = (geo.features || []).filter(f => f.geometry).map(f => {
+        const p = f.properties, id = `${p.state}Z${p.zone}`; f.properties.ugc = id;
+        let bb = [180, 90, -180, -90];
+        (f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates).forEach(poly => poly[0].forEach(c => { bb = [Math.min(bb[0], c[0]), Math.min(bb[1], c[1]), Math.max(bb[2], c[0]), Math.max(bb[3], c[1])]; }));
+        return { id, name: (p.name || id).replace(/\s+/g, ' ').trim(), cwa: p.cwa, lat: +p.lat, lon: +p.lon, geom: f.geometry, bb, alerts: [], c24: null, c48: null };
+      });
+      data.zoneGeo = geo; data.zoneKey = key;
+      setFeed('zones', 'ok', `Fire wx zones: ${data.zones.length} in range`);
+    } catch (e) { if (seq !== data.zoneSeq) return; setFeed('zones', 'err', 'Fire wx zones: failed (' + e.message + ')'); setFeed('alerts', '', 'RFW / FWW: not loaded'); setFeed('starts', '', 'New starts: not loaded'); render(); return; }
+    render();
+  }
+  const byId = {}; data.zones.forEach(z => { byId[z.id] = z; z.alerts = []; z.c24 = z.c48 = null; });
+  if (!data.zones.length) return;
+  // Warnings and watches
+  setFeed('alerts', 'load', 'RFW / FWW: loading…');
+  try {
+    const found = [];
+    if (replay) {
+      const iso = d => d.toISOString().slice(0, 16) + 'Z', sts = iso(new Date(T - 6 * 3600e3)), ets = iso(new Date(+T + 24 * 3600e3));
+      for (const sig of ['W', 'A']) {
+        const txt = await fetch(`${IEM}/cgi-bin/request/gis/watchwarn.py?accept=csv&sts=${sts}&ets=${ets}&phenomena=FW&significance=${sig}&limitps=yes`).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); });
+        const rows = txt.trim().split('\n').map(l => l.split(',')), h = rows[0] || [], ci = n => h.indexOf(n);
+        const iS = ci('utc_issue'), iE = ci('utc_expire'), iU = ci('ugc');
+        if (iS < 0 || iE < 0 || iU < 0) throw new Error('unexpected archive format');
+        rows.slice(1).forEach(r => found.push({ ugc: r[iU], ev: sig === 'W' ? 'RFW' : 'FWW', s: new Date(r[iS].replace(' ', 'T') + ':00Z'), e: new Date(r[iE].replace(' ', 'T') + ':00Z') }));
+      }
+    } else {
+      const j = await getJson(`${NWSAPI}/alerts/active?event=${encodeURIComponent('Red Flag Warning,Fire Weather Watch')}`);
+      (j.features || []).forEach(f => { const p = f.properties; ((p.geocode || {}).UGC || []).forEach(ugc => found.push({ ugc, ev: /Red Flag/i.test(p.event) ? 'RFW' : 'FWW', s: new Date(p.onset || p.effective), e: new Date(p.ends || p.expires) })); });
+    }
+    if (seq !== data.zoneSeq) return;
+    let n = 0;
+    found.forEach(al => { const z = byId[al.ugc]; if (!z || isNaN(al.s) || isNaN(al.e) || al.e <= al.s || al.e < new Date(T - 3600e3) || al.s > new Date(+T + 24 * 3600e3)) return;
+      if (!z.alerts.some(x => x.ev === al.ev && +x.s === +al.s && +x.e === +al.e)) z.alerts.push(al); });
+    data.zones.forEach(z => { z.alerts.sort((x, y) => (x.ev === 'RFW' ? 0 : 1) - (y.ev === 'RFW' ? 0 : 1) || x.s - y.s); if (z.alerts.length) n++; });
+    setFeed('alerts', 'ok', `RFW / FWW: ${n} zone${n === 1 ? '' : 's'} in range${replay ? ' (archive)' : ''}`);
+  } catch (e) { if (seq !== data.zoneSeq) return; setFeed('alerts', 'err', 'RFW / FWW: failed (' + e.message + ')'); }
+  render();
+  // New starts in the last 24 and 48 hours, counted per zone
+  setFeed('starts', 'load', 'New starts: loading…');
+  try {
+    const bb = data.zones.reduce((b, z) => [Math.min(b[0], z.bb[0]), Math.min(b[1], z.bb[1]), Math.max(b[2], z.bb[2]), Math.max(b[3], z.bb[3])], [180, 90, -180, -90]);
+    const feats = await arcQuery('WFIGS_Incident_Locations_YearToDate', { where: `IncidentTypeCategory='WF' AND FireDiscoveryDateTime >= ${ts(new Date(T - 48 * 3600e3))} AND FireDiscoveryDateTime <= ${ts(T)}`,
+      geometry: bb.join(','), geometryType: 'esriGeometryEnvelope', inSR: '4326', spatialRel: 'esriSpatialRelIntersects', outFields: 'FireDiscoveryDateTime', orderByFields: 'OBJECTID' });
+    if (seq !== data.zoneSeq) return;
+    data.zones.forEach(z => { z.c24 = 0; z.c48 = 0; });
+    let tot = 0;
+    feats.forEach(f => { if (!f.geometry) return; const z = findZone({ lon: f.geometry.x, lat: f.geometry.y }); if (!z) return; tot++; z.c48++; if (T - f.attributes.FireDiscoveryDateTime <= 24 * 3600e3) z.c24++; });
+    setFeed('starts', 'ok', `New starts (48 h): ${tot} in these zones`);
+  } catch (e) { if (seq !== data.zoneSeq) return; setFeed('starts', 'err', 'New starts: failed (' + e.message + ')'); }
+  render();
+}
+
 async function loadElev(inc) {
   if (!inc || data.elev[inc.id] !== undefined) return;
   data.elev[inc.id] = null;
@@ -623,13 +727,25 @@ function initMap() {
   const setBase = k => { if (tileLayer) map.removeLayer(tileLayer); const b = BASEMAPS[k]; tileLayer = L.tileLayer(b[1], { maxZoom: 18, ...b[2] }).addTo(map); tileLayer.bringToBack(); };
   setBase(saved);
   $('basemap').addEventListener('change', e => { setBase(e.target.value); try { localStorage.setItem('aab.basemap', e.target.value); } catch (x) {} });
-  lyr.perim = L.layerGroup().addTo(map); lyr.ring = L.layerGroup().addTo(map); lyr.route = L.layerGroup().addTo(map); lyr.pts = L.layerGroup().addTo(map);
+  lyr.zones = L.layerGroup().addTo(map); lyr.perim = L.layerGroup().addTo(map); lyr.ring = L.layerGroup().addTo(map); lyr.route = L.layerGroup().addTo(map); lyr.pts = L.layerGroup().addTo(map);
   L.control.scale({ imperial: true, metric: false }).addTo(map);
 }
 let lastFit = '';
 function renderMap(a, list, inc, rec) {
   if (!map) return;
-  lyr.ring.clearLayers(); lyr.route.clearLayers(); lyr.pts.clearLayers(); lyr.perim.clearLayers();
+  lyr.ring.clearLayers(); lyr.route.clearLayers(); lyr.pts.clearLayers(); lyr.perim.clearLayers(); lyr.zones.clearLayers();
+  if (state.showZones && data.zoneGeo) {
+    const zById = {}; data.zones.forEach(z => zById[z.id] = z);
+    L.geoJSON(data.zoneGeo, {
+      style: f => { const z = zById[f.properties.ugc], al = z && z.alerts[0], sel = state.zone === f.properties.ugc;
+        return al ? { color: al.ev === 'RFW' ? '#d0021b' : '#c77d00', weight: sel ? 3.5 : 2, fillColor: al.ev === 'RFW' ? '#d0021b' : '#f5a623', fillOpacity: 0.18 }
+          : { color: sel ? '#111' : '#6c7a89', weight: sel ? 3 : 1, dashArray: sel ? null : '3 4', fillOpacity: 0 }; },
+      onEachFeature: (f, l) => { const z = zById[f.properties.ugc]; if (!z) return;
+        l.bindTooltip(() => `<b>${esc(z.name)}</b> (${z.id})<br>${z.alerts.length ? z.alerts.map(x => alertText(x)).join('<br>') : 'No warning or watch'}<br>New starts: ${z.c24 === null ? '…' : `${z.c24} in 24 h · ${z.c48} in 48 h`}`, { sticky: true });
+        l.on('click', e => { if (state.zone === z.id) state.zpt = { lat: e.latlng.lat, lon: e.latlng.lng }; else { state.zone = z.id; state.zpt = null; } state.inc = null; state.view = 'zone'; render(); }); },
+    }).addTo(lyr.zones);
+  }
+  if (inc && inc.zone) L.marker([inc.lat, inc.lon], { icon: L.divIcon({ className: '', html: '<div class="zonept"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), zIndexOffset: 450, interactive: false }).addTo(lyr.route);
   const circle = L.circle([a.lat, a.lon], { radius: state.radius * 1852, color: '#1d4f80', weight: 2, dashArray: '6 6', fill: false }).addTo(lyr.ring);
   L.marker([a.lat, a.lon], { icon: L.divIcon({ className: '', html: '<div class="basemk"></div>', iconSize: [14, 14] }), zIndexOffset: 500 }).bindTooltip(a.id + ' · staffing base').addTo(lyr.ring);
   const byId = {}; data.incidents.forEach(i => byId[i.id] = i);
@@ -646,7 +762,7 @@ function renderMap(a, list, inc, rec) {
     const sel = inc && i.id === inc.id;
     const m = L.marker([i.lat, i.lon], { icon: L.divIcon({ className: 'mk' + (sel ? ' sel' : ''), html: `<svg viewBox="-9 -9 18 18">${sym(i.k, 0, 0, 6)}</svg>`, iconSize: sel ? [26, 26] : [18, 18] }), zIndexOffset: sel ? 400 : 0 });
     m.bindTooltip(`${esc(i.n)} · ${KINDS[i.k]} · ${fmt(i.ac || 0)} ac · ${Math.round(i.d)} nm`);
-    m.on('click', () => { state.inc = i.id; render(); });
+    m.on('click', () => { state.inc = i.id; state.zone = null; state.zpt = null; state.view = 'inc'; render(); });
     m.addTo(lyr.pts);
   });
   if (inc) {
@@ -750,19 +866,39 @@ function render() {
         <input type="radio" name="inc" value="${esc(i.id)}" ${i.id === state.inc ? 'checked' : ''}>
         <span class="nm">${symIcon(i.k)} ${esc(i.n)} <span class="cx">${esc(cxLabel(i))}</span></span>
         <span class="dist">${Math.round(i.d)} nm ${card(i.b)}</span>
-        <span class="meta">${i.ac != null ? fmt(i.ac) + ' ac' : 'size n/a'}${i.pct != null ? ' · ' + i.pct + '% contained' : ''} · ETE ${hrs(i.d / ac.cruise)}${upd ? ' · ' + upd : ''}${i.cpx ? ' · part of ' + esc(i.cpx) : ''}</span>
+        <span class="meta">${i.ac != null ? fmt(i.ac) + ' ac' : 'size n/a'}${i.pct != null ? ' · ' + i.pct + '% contained' : ''} · ETE ${hrs(leg(i.d, ac, true, false))}${upd ? ' · ' + upd : ''}${i.cpx ? ' · part of ' + esc(i.cpx) : ''}</span>
       </label>`; }).join('')
     : `<div class="empty">No incidents of the selected types within ${state.radius} nm${replay ? ' on this date' : ' right now'}. Widen the radius or tick more types${replay ? '' : ', or use Replay to load a past fire day'}.</div>`;
   const r = $('retry'); if (r) r.addEventListener('click', loadIncidents);
 
-  const inc = list.find(i => i.id === state.inc) || null;
+  // Fire weather zones (standby brief targets)
+  const zl = data.zones.map(z => ({ ...z, d: distNm(a, z), b: bearing(a, z) })).sort((x, y) => x.d - y.d);
+  if (state.zone && !zl.find(z => z.id === state.zone)) { state.zone = null; state.zpt = null; }
+  $('vinc').setAttribute('aria-pressed', state.view === 'inc'); $('vzone').setAttribute('aria-pressed', state.view === 'zone');
+  $('incpane').hidden = state.view !== 'inc'; $('zonepane').hidden = state.view !== 'zone';
+  const zf = data.feeds.zones || {}, nAl = zl.filter(z => z.alerts.length).length;
+  $('zonecount').textContent = zf.cls === 'load' ? '' : `${zl.length} zones touch the ${state.radius} nm radius, nearest center first. ${nAl} under a warning or watch.`;
+  $('zones').innerHTML = zf.cls === 'load' ? '<div class="empty">Loading zones…</div>' : zf.cls === 'err' ? '<div class="empty">Zones could not be loaded. <button type="button" class="btn sm" id="zretry">Retry</button></div>'
+    : zl.length ? zl.map(z => `<label class="inc ${z.id === state.zone ? 'sel' : ''}">
+        <input type="radio" name="zone" value="${z.id}" ${z.id === state.zone ? 'checked' : ''}>
+        <span class="nm">${esc(z.name)} <span class="cx">${z.id}</span></span>
+        <span class="dist">${Math.round(z.d)} nm ${card(z.b)}</span>
+        <span class="meta">${z.alerts.length ? z.alerts.map(x => `<span class="al ${x.ev.toLowerCase()}">${alertText(x)}</span>`).join(' ') : 'No warning or watch'} · starts ${z.c24 === null ? '…' : `${z.c24} in 24 h, ${z.c48} in 48 h`} · ETE ${hrs(leg(z.d, ac, true, false))}</span>
+      </label>`).join('') : '<div class="empty">No fire weather zones found in range.</div>';
+  const zr = $('zretry'); if (zr) zr.addEventListener('click', loadZones);
+
+  let inc = list.find(i => i.id === state.inc) || null;
+  if (!inc && state.zone) {
+    const z = zl.find(x => x.id === state.zone), pt = state.zpt || { lat: z.lat, lon: z.lon };
+    inc = { id: `Z:${z.id}:${pt.lat.toFixed(3)},${pt.lon.toFixed(3)}`, n: `${z.name} (${z.id})`, lat: pt.lat, lon: pt.lon, d: distNm(a, pt), b: bearing(a, pt), zone: true, z, moved: !!state.zpt };
+  }
   if (inc) loadElev(inc);
 
   // Recovery airport options: staffing base, then nearest candidate bases to the fire.
   const ref = inc || a;
   const near = Object.keys(BASE_TZ).filter(id => id !== a.id && airport(id)).map(id => ({ id, d: distNm(ref, airport(id)) })).sort((x, y) => x.d - y.d).slice(0, 8);
   if (!near.find(n => n.id === state.recover)) state.recover = '';
-  $('recover').innerHTML = `<option value="">${a.id} · staffing base</option>` + near.map(n => `<option value="${n.id}">${n.id} · ${esc(airport(n.id).city)} · ${Math.round(n.d)} nm from ${inc ? 'fire' : 'base'}</option>`).join('');
+  $('recover').innerHTML = `<option value="">${a.id} · staffing base</option>` + near.map(n => `<option value="${n.id}">${n.id} · ${esc(airport(n.id).city)} · ${Math.round(n.d)} nm from ${inc ? (inc.zone ? 'zone point' : 'fire') : 'base'}</option>`).join('');
   $('recover').value = state.recover;
   $('recmodewrap').hidden = !state.recover;
   const rec = state.recover ? airport(state.recover) : a;
@@ -770,10 +906,15 @@ function render() {
   renderMap(a, list, inc, rec);
   renderBrief(a, ac, inc, { o, da, fc, rw }, all, rec, T, tz);
 }
+function alertText(x) {
+  const a = airport(state.apt), tz = aptTz(a), ymd = briefYmd();
+  return `${x.ev} ${localStamp(x.s, tz, ymd)}–${localStamp(x.e, tz, ymd)}`;
+}
 const ageText = ms => { const h = ms / 3600e3; return h < 1 ? Math.max(1, Math.round(h * 60)) + ' min' : h < 48 ? Math.round(h) + ' h' : Math.round(h / 24) + ' d'; };
 const cxLabel = i => i.k === 'IA' ? 'New start' : (i.lvl || i.org || 'Unassigned').replace(' Incident', '').replace('Complex Incident Management Team', 'CIMT');
 
 const MIT = {
+  fwz: 'Expect rapid fire growth and new starts; plan fuel and relief for an extended or diverted mission.',
   fc: 'Check the TAF trend; consider delaying launch or another base.',
   wind: 'Review the forecast for the launch and recovery windows.',
   gust: 'Expect turbulence and wind shear on departure and over the fire; brief with the PIC.',
@@ -801,15 +942,16 @@ function renderBrief(a, ac, inc, wx, all, rec, T, tz) {
   const tbody = $('factors').querySelector('tbody'), route = $('route');
   if (!inc) {
     $('band').className = 'band none';
-    $('band').innerHTML = '<div class="lbl">Overall risk</div><div class="lvl">Select an incident</div><div class="rule">Pick an incident from the list or the map to build the brief.</div>';
-    $('stops').innerHTML = ''; route.innerHTML = '<div><span>Status</span><b>No incident selected</b></div>'; tbody.innerHTML = ''; window.briefText = '';
+    $('band').innerHTML = '<div class="lbl">Overall risk</div><div class="lvl">Select an incident or zone</div><div class="rule">Pick an incident, or a fire weather zone for a standby brief, from the list or the map.</div>';
+    $('stops').innerHTML = ''; route.innerHTML = '<div><span>Status</span><b>Nothing selected</b></div>'; tbody.innerHTML = ''; window.briefText = '';
     return;
   }
   const v = id => $(id).value, o = wx.o, mission = v('mission'), workAgl = WORK_AGL[mission];
   const launch = toMin(v('launch')), dutyStart = toMin(v('duty'));
   const onscene = Math.max(0, +v('onscene') || 0), flown = Math.max(0, +v('flown') || 0);
   const recOther = rec.id !== a.id, recMode = recOther ? v('recmode') : 'home';
-  const eteOut = inc.d / ac.cruise, eteBack = distNm(inc, rec) / ac.cruise, eteHome = recMode === 'refuel' ? distNm(rec, a) / ac.cruise : 0;
+  const isZone = !!inc.zone, tgt = isZone ? 'zone' : 'fire';
+  const eteOut = leg(inc.d, ac, true, false), eteBack = leg(distNm(inc, rec), ac, false, true), eteHome = recMode === 'refuel' ? leg(distNm(rec, a), ac, true, true) : 0;
   const onStart = launch + eteOut * 60, onEnd = onStart + onscene * 60, landRec = onEnd + eteBack * 60;
   const dayEnd = recMode === 'refuel' ? landRec + 30 + eteHome * 60 : landRec;
   const sunset = localMinutes(sunsetUTC(briefYmd(), a.lat, a.lon), tz), legalEnd = sunset + 30, dayMargin = legalEnd - onEnd;
@@ -819,14 +961,14 @@ function renderBrief(a, ac, inc, wx, all, rec, T, tz) {
 
   route.innerHTML = `
     <div><span>Distance / bearing</span><b>${Math.round(inc.d)} nm · ${p3(inc.b)}°</b></div>
-    <div><span>ETE to fire</span><b>${hrs(eteOut)}</b></div>
-    <div><span>Over fire</span><b>${hhmm(onStart)}–${hhmm(onEnd)}</b></div>
-    <div><span>Max time over fire</span><b>${hrs(maxOn)}</b></div>
+    <div><span>ETE to ${tgt}</span><b>${hrs(eteOut)}</b></div>
+    <div><span>Over ${tgt}</span><b>${hhmm(onStart)}–${hhmm(onEnd)}</b></div>
+    <div><span>Max time over ${tgt}</span><b>${hrs(maxOn)}</b></div>
     <div><span>Land ${esc(rec.id)}</span><b>${hhmm(landRec)}</b></div>
     ${recMode === 'refuel' ? `<div><span>Back at ${esc(a.id)}</span><b>${hhmm(dayEnd)}</b></div>` : ''}
     <div><span>Sunset (${esc(a.id)})</span><b>${hhmm(sunset)}</b></div>
     <div><span>Legal end (+30)</span><b>${hhmm(legalEnd)}</b></div>
-    <div><span>Fire elevation</span><b>${hasEl ? fmt(fireEl) + ' ft' : fireEl === false ? 'n/a' : '…'}</b></div>
+    <div><span>${isZone ? 'Terrain at point' : 'Fire elevation'}</span><b>${hasEl ? fmt(fireEl) + ' ft' : fireEl === false ? 'n/a' : '…'}</b></div>
     <div><span>Working altitude</span><b>${hasEl ? fmt(fireEl + workAgl) + ' ft' : workAgl + ' AGL'}</b></div>
     <div><span>Projected duty</span><b>${dutyLen.toFixed(1)} h</b></div>
     <div><span>Flight time today</span><b>${flightToday.toFixed(1)} h</b></div>`;
@@ -872,16 +1014,30 @@ function renderBrief(a, ac, inc, wx, all, rec, T, tz) {
   const smoke = +v('smoke'), tsf = +v('tsfire');
   add('Medium', 'smoke', 'Visibility over fire (smoke or cloud)', ['Good', 'Reduced', 'Poor (< 3 sm)'][smoke], smoke, 'Crew input');
   add('Medium', 'tsfire', 'Thunderstorms near fire', { 0:'None', 1:'Forecast or building', 3:'Active within 20 nm' }[tsf], tsf, 'Crew input');
+  // Fire weather zone: warnings and watches against the planned time over the fire or zone
+  const fz = isZone ? inc.z : findZone(inc);
+  if (fz) {
+    const dayStart = +zonedToUtc(briefYmd(), 0, tz), w0 = dayStart + onStart * 60e3, w1 = dayStart + onEnd * 60e3;
+    const hit = fz.alerts.filter(x => +x.s <= w1 && +x.e >= w0), rfwHit = hit.some(x => x.ev === 'RFW');
+    add('Medium', 'fwz', `Fire weather zone ${fz.id}`, fz.alerts.length ? fz.alerts.map(x => alertText(x)).join(' · ') + (hit.length ? ' · in effect during planned time' : ' · outside planned time') : 'No Red Flag Warning or Fire Weather Watch',
+      !fz.alerts.length ? 0 : rfwHit ? 2 : 1, state.mode === 'replay' ? 'NWS warning archive' : 'NWS alerts');
+  } else add('Medium', null, 'Fire weather zone', (data.feeds.zones || {}).cls === 'load' ? 'Loading zones…' : 'Zone not found', null, 'NWS');
   add('Medium', 'day', 'Daylight at end of time over fire', `${dayMargin >= 0 ? Math.round(dayMargin) + ' min before' : Math.round(-dayMargin) + ' min past'} legal end`, dayMargin < 0 ? 3 : dayMargin < 60 ? 2 : 0, 'Computed sunset at ' + a.id);
   add('Medium', null, 'Route weather (G-AIRMET, SIGMET, CWA)', 'Not connected', null, 'Build 2');
   add('Medium', 'notam', 'NOTAMs, base and fire area', $('notamok').checked ? 'Checked' : 'Not checked', $('notamok').checked ? 0 : -2, 'Crew check');
   // ---- Mission
   const acount = Math.max(0, +v('acount') || 0), others = all.filter(i => i.id !== inc.id && distNm(inc, i) <= 25).length;
   let nearApt = null; Object.values(data.airports).forEach(p => { const d = distNm(p, inc); if (!nearApt || d < nearApt.d) nearApt = { d, id: p.id }; });
-  add('Mission', 'cx', 'Incident complexity', `${cxLabel(inc)} · ${inc.ac != null ? fmt(inc.ac) + ' ac' : 'size n/a'}${inc.pct != null ? ' · ' + inc.pct + '%' : ''}`, -1, 'WFIGS');
-  add('Mission', 'acount', 'Aircraft over fire', `${acount}`, acount >= 8 ? 2 : acount >= 4 ? 1 : 0, 'Crew input');
-  add('Mission', 'near', 'Other incidents within 25 nm', `${others}`, others >= 3 ? 2 : others >= 1 ? 1 : 0, 'WFIGS');
-  add('Mission', 'apt', 'Fire near an airport', `${nearApt.d.toFixed(0)} nm to ${nearApt.id}`, nearApt.d <= 5 ? 2 : nearApt.d <= 10 ? 1 : 0, 'Airport data (4,000 ft+ paved)');
+  if (isZone) {
+    add('Mission', 'cx', 'Incident complexity', 'Not applicable (standby)', -3, 'No incident');
+    add('Mission', 'acount', 'Aircraft over fire', 'Not applicable (standby)', -3, 'No incident');
+  } else {
+    add('Mission', 'cx', 'Incident complexity', `${cxLabel(inc)} · ${inc.ac != null ? fmt(inc.ac) + ' ac' : 'size n/a'}${inc.pct != null ? ' · ' + inc.pct + '%' : ''}`, -1, 'WFIGS');
+    add('Mission', 'acount', 'Aircraft over fire', `${acount}`, acount >= 8 ? 2 : acount >= 4 ? 1 : 0, 'Crew input');
+    add('Mission', 'near', 'Other incidents within 25 nm', `${others}`, others >= 3 ? 2 : others >= 1 ? 1 : 0, 'WFIGS');
+  }
+  if (fz) add('Mission', 'starts', `New starts in zone ${fz.id}`, fz.c24 === null ? 'Loading…' : `${fz.c24} in 24 h · ${fz.c48} in 48 h`, fz.c24 === null ? null : -1, 'WFIGS');
+  add('Mission', 'apt', isZone ? 'Zone point near an airport' : 'Fire near an airport', `${nearApt.d.toFixed(0)} nm to ${nearApt.id}`, nearApt.d <= 5 ? 2 : nearApt.d <= 10 ? 1 : 0, 'Airport data (4,000 ft+ paved)');
   add('Mission', 'mission', 'Mission type', { ATGS:'ATGS orbit', ASM:'ASM low-level', LEAD:'Lead low-level', RECON:'Recon / IAA' }[mission], mission === 'ASM' || mission === 'LEAD' ? 1 : 0, 'Crew input');
   add('Mission', 'tfr', 'TFRs, fire area and route', $('tfrok').checked ? 'Checked' : 'Not checked', $('tfrok').checked ? 0 : -2, 'Crew check (feed in build 2)');
   add('Mission', 'mil', 'Military airspace deconfliction', $('milok').checked ? 'Confirmed with dispatch' : 'Not confirmed', $('milok').checked ? 0 : -2, 'Crew check (geometry in build 2)');
@@ -909,20 +1065,20 @@ function renderBrief(a, ac, inc, wx, all, rec, T, tz) {
   if (worst === 2 && below >= 3) { worst++; bumped = true; }
   const drivers = [...rated].sort((x, y) => y.lvl - x.lvl).filter(f => f.lvl > 0).slice(0, 3);
   $('band').className = 'band l' + worst;
-  $('band').innerHTML = `<div class="lbl">Overall risk · ${esc(inc.n)}</div><div class="lvl">${LEVELS[worst]}</div>
+  $('band').innerHTML = `<div class="lbl">${isZone ? 'Standby brief' : 'Overall risk'} · ${esc(inc.n)}${isZone ? (inc.moved ? ' · point moved' : ' · zone center') : ''}</div><div class="lvl">${LEVELS[worst]}</div>
     ${drivers.length ? '<ol>' + drivers.map(d => `<li>${d.name}: <span class="mono">${esc(d.value)}</span></li>`).join('') + '</ol>' : '<div class="rule">No elevated factors from connected data.</div>'}
     <div class="rule">${bumped ? 'Raised one level: three or more factors just below the highest. ' : ''}${F.filter(f => f.lvl === null).length} factors pending data. ${F.filter(f => f.lvl === -2).length} crew checks open.</div>`;
 
-  const tag = f => f.lvl === null ? 'pending' : f.lvl === -1 ? 'unrated' : f.lvl === -2 ? 'CONFIRM' : LEVELS[f.lvl];
+  const tag = f => f.lvl === null ? 'pending' : f.lvl === -3 ? 'n/a' : f.lvl === -1 ? 'unrated' : f.lvl === -2 ? 'CONFIRM' : LEVELS[f.lvl];
   let rows = '', cat = '';
   F.forEach(f => {
     if (f.cat !== cat) { cat = f.cat; rows += `<tr class="grp"><td colspan="4">${cat}</td></tr>`; }
-    const pill = f.lvl === null ? '<span class="pill pend">Pending</span>' : f.lvl === -1 ? '<span class="pill pend">Unrated</span>' : f.lvl === -2 ? '<span class="pill l1">Confirm</span>' : `<span class="pill l${f.lvl}">${LEVELS[f.lvl]}</span>`;
+    const pill = f.lvl === null ? '<span class="pill pend">Pending</span>' : f.lvl === -3 ? '<span class="pill pend">N/A</span>' : f.lvl === -1 ? '<span class="pill pend">Unrated</span>' : f.lvl === -2 ? '<span class="pill l1">Confirm</span>' : `<span class="pill l${f.lvl}">${LEVELS[f.lvl]}</span>`;
     rows += `<tr><td>${f.name}${f.lvl >= 1 && MIT[f.key] ? `<div class="mit">${MIT[f.key]}</div>` : ''}</td><td class="val">${esc(f.value)}</td><td>${pill}</td><td class="src">${f.src}</td></tr>`;
   });
   tbody.innerHTML = rows;
 
-  let txt = `AIR ATTACK RISK BRIEF ${briefYmd()}${state.mode === 'replay' ? ' (REPLAY)' : ''}\n`;
+  let txt = `AIR ATTACK ${isZone ? 'STANDBY' : 'RISK'} BRIEF ${briefYmd()}${state.mode === 'replay' ? ' (REPLAY)' : ''}\n`;
   txt += `Base ${a.id} rwy ${wx.rw.id} | ${ac.name} | ${inc.n} ${Math.round(inc.d)} nm ${p3(inc.b)} | launch ${hhmm(launch)} | land ${rec.id}\n`;
   if (o) txt += `METAR ${o.raw}\n`;
   txt += `Overall: ${LEVELS[worst]}\n`;
@@ -934,8 +1090,8 @@ function renderBrief(a, ac, inc, wx, all, rec, T, tz) {
 
 // ====================== INIT ======================
 let reloadTimer;
-const reloadAll = () => { state.inc = null; loadWx(); loadIncidents(); };
-function setAirport(id) { state.apt = id; state.rwy = null; state.recover = ''; reloadAll(); }
+const reloadAll = () => { state.inc = null; loadWx(); loadIncidents(); loadZones(); };
+function setAirport(id) { state.apt = id; state.rwy = null; state.recover = ''; state.zone = null; state.zpt = null; reloadAll(); }
 
 async function init() {
   renderFeeds();
@@ -951,7 +1107,7 @@ async function init() {
   $('aircraft').innerHTML = AIRCRAFT.map(x => `<option value="${x.id}">${x.name}</option>`).join('');
   $('radius').innerHTML = RADII.map(r => `<button type="button" data-r="${r}" id="r${r}">${r}</button>`).join('');
   $('filt').innerHTML = Object.entries(KINDS).map(([k, l]) => `<label><input type="checkbox" id="f${k}" data-k="${k}" checked>${symIcon(k)}<span>${l} (<span id="cnt${k}">0</span>)</span></label>`).join('');
-  $('legend').innerHTML = Object.entries(KINDS).map(([k, l]) => `<span>${symIcon(k)}${l}</span>`).join('') + '<span>◆ staffing base</span><span>Shaded areas are mapped perimeters</span>';
+  $('legend').innerHTML = Object.entries(KINDS).map(([k, l]) => `<span>${symIcon(k)}${l}</span>`).join('') + '<span>◆ staffing base</span><span>Shaded areas are mapped perimeters</span><span><i class="sw rfw"></i> Red Flag Warning</span><span><i class="sw fww"></i> Fire Weather Watch</span><span><i class="sw fwz"></i> Fire weather zone</span>';
   $('airport').value = state.apt; $('aircraft').value = state.acft;
 
   $('airport').addEventListener('change', e => { $('otherapt').value = ''; setAirport(e.target.value); });
@@ -964,9 +1120,12 @@ async function init() {
   });
   $('runway').addEventListener('change', e => { state.rwy = e.target.value; render(); });
   $('aircraft').addEventListener('change', e => { state.acft = e.target.value; render(); });
-  $('radius').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.radius = +b.dataset.r; state.inc = null; loadIncidents(); render(); });
+  $('radius').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.radius = +b.dataset.r; state.inc = null; loadIncidents(); loadZones(); render(); });
   $('filt').addEventListener('change', e => { const k = e.target.dataset.k; if (k) { state.filt[k] = e.target.checked; render(); } });
-  $('incidents').addEventListener('change', e => { if (e.target.name === 'inc') { state.inc = e.target.value; render(); } });
+  $('incidents').addEventListener('change', e => { if (e.target.name === 'inc') { state.inc = e.target.value; state.zone = null; state.zpt = null; render(); } });
+  $('zones').addEventListener('change', e => { if (e.target.name === 'zone') { state.zone = e.target.value; state.zpt = null; state.inc = null; render(); } });
+  $('view').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.view = b.dataset.v; render(); });
+  $('zonetoggle').addEventListener('change', e => { state.showZones = e.target.checked; render(); });
   $('recover').addEventListener('change', e => { state.recover = e.target.value; render(); });
   ['mission', 'onscene', 'duty', 'flown', 'acount', 'smoke', 'tsfire', 'trainee', 'unfamiliar', 'newjur', 'milok', 'notamok', 'tfrok', 'recmode'].forEach(id => $(id).addEventListener('input', render));
   $('launch').addEventListener('input', () => { render(); if (state.mode === 'replay') { clearTimeout(reloadTimer); reloadTimer = setTimeout(reloadAll, 700); } });
