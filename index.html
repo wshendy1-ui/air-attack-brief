@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
-/* Build 1.1. Inputs in flow order on the left, map and brief on the right; stacks on phones. */
+/* Build 2. Inputs in flow order on the left, map and brief on the right; stacks on phones. */
 :root {
   --bg: #eef1f4; --panel: #ffffff; --ink: #17212c; --muted: #5a6877; --line: #d3dae2;
   --accent: #1d4f80; --accent-soft: #e2ebf5; --sample: #8a5a00; --sample-bg: #fff3d6;
@@ -112,6 +112,9 @@ svg.sym { width: 14px; height: 14px; flex: none; vertical-align: -2px; }
 .sw { display: inline-block; width: 14px; height: 10px; border: 1.5px solid; border-radius: 2px; }
 .sw.rfw { background: rgba(208, 2, 27, .25); border-color: #d0021b; } .sw.fww { background: rgba(245, 166, 35, .3); border-color: #c77d00; } .sw.fwz { border-color: #6c7a89; border-style: dashed; }
 .zonept { width: 18px; height: 18px; border: 3px solid #111; border-radius: 50%; background: rgba(255,255,255,.7); box-shadow: 0 0 0 2px #fff; }
+.layers { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-bottom: 8px; font-size: 13.5px; }
+.sw.tfr { background: rgba(123, 31, 162, .25); border-color: #7b1fa2; } .sw.sua { border-color: #b0006d; } .sw.adv { border-color: #00796b; border-style: dashed; }
+.sw.mtr { height: 0; border-width: 2px 0 0; border-color: #5d4037; border-radius: 0; width: 16px; vertical-align: middle; }
 .maphead .right { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 /* Brief */
 .band { border-radius: 8px; padding: 14px 16px; border: 1px solid; }
@@ -275,8 +278,13 @@ details ul { padding-left: 18px; }
       <section class="card">
         <div class="maphead">
           <h3 style="font-size:18px">Map</h3>
-          <div class="right"><label class="check"><input type="checkbox" id="zonetoggle" checked> Fire weather zones</label>
-          <select id="basemap" aria-label="Basemap"></select></div>
+          <div class="right"><select id="basemap" aria-label="Basemap"></select></div>
+        </div>
+        <div class="layers" role="group" aria-label="Map layers">
+          <label class="check"><input type="checkbox" id="zonetoggle" checked> Fire weather zones</label>
+          <label class="check"><input type="checkbox" id="tfrtoggle" checked> TFRs</label>
+          <label class="check"><input type="checkbox" id="miltoggle" checked> Military airspace</label>
+          <label class="check"><input type="checkbox" id="advtoggle" checked> Weather advisories on route</label>
         </div>
         <div id="map"></div>
         <div class="legend" id="legend"></div>
@@ -311,7 +319,10 @@ details ul { padding-left: 18px; }
             <li><b>Fire weather zones:</b> outlines from the NOAA/NWS reference map service. Red Flag Warnings and Fire Weather Watches come from the NWS alerts feed in Live mode and the Iowa Environmental Mesonet warning archive in Replay. Start counts are every WFIGS wildfire discovered in the zone in the last 24 and 48 hours, including fires already out.</li>
             <li><b>Flight times:</b> the first 10 minutes after takeoff and the last 10 minutes before landing are figured at 70% of cruise speed to allow for climb and descent.</li>
             <li><b>Replay mode:</b> incident points and day-by-day perimeters come from the WFIGS year-to-date services. Acres follow the perimeter mapped on or before the replay time. Complexity level reflects the incident's latest record, and containment for that day is not available.</li>
-            <li><b>Not connected yet:</b> TFRs, route weather advisories (G-AIRMET, SIGMET, CWA), and SUA/MTR geometry. NOTAMs, TFRs and military airspace are manual checks.</li>
+            <li><b>TFRs:</b> shapes, altitudes and times from tfr.faa.gov, copied into this site by a scheduled job about every 20 minutes. The page shows the age of that copy and stops using it after an hour. Always confirm TFRs with an official source. Not available in Replay.</li>
+            <li><b>Route weather advisories:</b> G-AIRMETs, SIGMETs and Center Weather Advisories from the Iowa Environmental Mesonet's copy of Aviation Weather Center products, checked against the route for the planned flight window. High-altitude turbulence and freezing-level G-AIRMETs are left out.</li>
+            <li><b>Military airspace:</b> special use airspace and military training routes from the FAA's aeronautical data service, with published altitudes and times of use. Whether an area or route is active is not published in a form the page can read, so confirm with dispatch.</li>
+            <li><b>NOTAMs</b> remain a manual check.</li>
           </ul>
         </details>
       </section>
@@ -328,6 +339,10 @@ const IEM = 'https://mesonet.agron.iastate.edu';
 const EPQS = 'https://epqs.nationalmap.gov/v1/json';
 const NWSZONES = 'https://mapservices.weather.noaa.gov/static/rest/services/nws_reference_maps/nws_reference_map/MapServer/9/query';
 const NWSAPI = 'https://api.weather.gov';
+const FAA = 'https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services';
+const TFR_STALE_MIN = 60;       // stop using the TFR copy when it is older than this
+const MTR_NM = 10, TFR_NM = 5;  // flag training routes within this distance of the fire; treat a TFR this close as the fire's own
+const GAIR = { IFR:['IFR conditions', 1], MT_OBSC:['Mountain obscuration', 2], 'TURB-LO':['Low-level turbulence', 1], LLWS:['Low-level wind shear', 1], SFC_WND:['Strong surface winds', 1], ICING:['Icing', 1] };
 
 // Candidate ATGS bases (unverified starter list) with GACC and time zone.
 const BASES = {
@@ -370,9 +385,10 @@ const BASEMAPS = {
   dark: ['Carto Dark', 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxNativeZoom:19, attribution:'&copy; OpenStreetMap contributors &copy; CARTO' }],
 };
 
-const state = { mode:'live', date:'2026-07-25', apt:'KLGD', rwy:null, acft:'AC690', radius:100, inc:null, zone:null, zpt:null, view:'inc', showZones:true, recover:'',
+const state = { mode:'live', date:'2026-07-25', apt:'KLGD', rwy:null, acft:'AC690', radius:100, inc:null, zone:null, zpt:null, view:'inc', showZones:true, showTfr:true, showMil:true, showAdv:true, recover:'',
   filt:{ CIMT:true, T3:true, T4:true, IA:true } };
-const data = { airports:{}, incidents:[], perims:{}, wx:null, taf:null, elev:{}, feeds:{}, loadSeq:0, wxSeq:0, zones:[], zoneGeo:null, zoneKey:'', zoneSeq:0 };
+const data = { airports:{}, incidents:[], perims:{}, wx:null, taf:null, elev:{}, feeds:{}, loadSeq:0, wxSeq:0, zones:[], zoneGeo:null, zoneKey:'', zoneSeq:0,
+  tfr:null, adv:{ g:[], s:[], c:[], key:'', st:'' }, sua:[], mtr:[], suaGeo:null, mtrGeo:null, milKey:'', milSeq:0, advSeq:0 };
 
 // ====================== HELPERS ======================
 const $ = id => document.getElementById(id);
@@ -409,6 +425,37 @@ function inGeom(lon, lat, g) {
     if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside;
   }
   return inside;
+}
+// Shortest distance in nm from a point to a GeoJSON line or polygon outline (0 when inside a polygon).
+function distToGeom(p, g) {
+  if (!g) return Infinity;
+  if (/Polygon/.test(g.type) && inGeom(p.lon, p.lat, g)) return 0;
+  const lines = g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : g.type === 'Polygon' ? g.coordinates : g.type === 'MultiPolygon' ? g.coordinates.flat() : [];
+  const k = Math.cos(p.lat * rad) * 60; let best = Infinity;
+  for (const ln of lines) for (let i = 0; i < ln.length - 1; i++) {
+    const ax = (ln[i][0] - p.lon) * k, ay = (ln[i][1] - p.lat) * 60, bx = (ln[i + 1][0] - p.lon) * k, by = (ln[i + 1][1] - p.lat) * 60;
+    const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy, t = L2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2)) : 0;
+    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+  }
+  return best;
+}
+// Points every few miles along the planned route, for checking what the route passes through.
+function routePoints(legs) {
+  const pts = [];
+  legs.forEach(([p, q]) => { const n = Math.max(1, Math.ceil(distNm(p, q) / 3)); for (let i = 0; i <= n; i++) pts.push({ lat: p.lat + (q.lat - p.lat) * i / n, lon: p.lon + (q.lon - p.lon) * i / n }); });
+  return pts;
+}
+const altText = (v, uom, code) => { v = +v; if (code === 'SFC' || (!v && uom !== 'FL')) return 'SFC'; if (uom === 'FL') return 'FL' + String(v).padStart(3, '0'); return fmt(v) + ' ft' + (code === 'HEI' ? ' AGL' : ' MSL'); };
+const altFt = (v, uom, code) => code === 'SFC' ? 0 : uom === 'FL' ? +v * 100 : +v || 0;
+// KML placemarks -> [{ p: fields, geom: MultiPolygon }]
+function parseKml(txt) {
+  const d = new DOMParser().parseFromString(txt, 'text/xml');
+  return [...d.getElementsByTagName('Placemark')].map(pm => {
+    const p = {}; [...pm.getElementsByTagName('SimpleData')].forEach(x => p[x.getAttribute('name')] = x.textContent);
+    const polys = [...pm.getElementsByTagName('Polygon')].map(pg => { const ob = pg.getElementsByTagName('outerBoundaryIs')[0], c = ob && ob.getElementsByTagName('coordinates')[0];
+      return c ? [c.textContent.trim().split(/\s+/).map(x => x.split(',').slice(0, 2).map(Number)).filter(x => isFinite(x[0]) && isFinite(x[1]))] : null; }).filter(r => r && r[0].length > 2);
+    return polys.length ? { p, geom: { type: 'MultiPolygon', coordinates: polys } } : null;
+  }).filter(Boolean);
 }
 const findZone = p => data.zones.find(z => p.lon >= z.bb[0] && p.lon <= z.bb[2] && p.lat >= z.bb[1] && p.lat <= z.bb[3] && inGeom(p.lon, p.lat, z.geom)) || null;
 // --- time zones
@@ -499,8 +546,8 @@ const kindColor = k => getComputedStyle(document.documentElement).getPropertyVal
 // ====================== DATA LOADING ======================
 function setFeed(key, cls, text) { data.feeds[key] = { cls, text }; renderFeeds(); }
 function renderFeeds() {
-  const order = ['wfigs', 'perim', 'metar', 'taf', 'elev', 'zones', 'alerts', 'starts'];
-  const fixed = [['', 'TFRs: manual check'], ['', 'G-AIRMET / SIGMET / CWA: not connected'], ['', 'SUA / MTR: manual check'], ['', 'NOTAMs: manual check']];
+  const order = ['wfigs', 'perim', 'metar', 'taf', 'elev', 'zones', 'alerts', 'starts', 'tfr', 'adv', 'mil'];
+  const fixed = [['', 'NOTAMs: manual check']];
   $('feeds').innerHTML = order.filter(k => data.feeds[k]).map(k => `<span class="chip ${data.feeds[k].cls}"><span class="dot"></span>${esc(data.feeds[k].text)}</span>`).join('')
     + fixed.map(f => `<span class="chip"><span class="dot"></span>${f[1]}</span>`).join('');
 }
@@ -703,6 +750,82 @@ async function loadZones() {
   render();
 }
 
+// TFRs: a copy of tfr.faa.gov written into data/tfr.json by the scheduled job.
+async function loadTfr() {
+  if (state.mode === 'replay') { data.tfr = null; setFeed('tfr', '', 'TFRs: not available in replay'); render(); return; }
+  setFeed('tfr', 'load', 'TFRs: loading…');
+  try {
+    const j = await getJson('data/tfr.json?t=' + Date.now(), { cache: 'no-store' });
+    const age = Math.round((Date.now() - new Date(j.generated)) / 60e3);
+    data.tfr = { ...j, age, stale: !(age <= TFR_STALE_MIN) };
+    setFeed('tfr', data.tfr.stale ? 'warn' : 'ok', data.tfr.stale ? `TFRs: copy is ${ageText(age * 60e3)} old, not used` : `TFRs: ${j.features.length} nationwide, ${age} min old`);
+  } catch (e) { data.tfr = null; setFeed('tfr', 'warn', 'TFRs: no data yet (scheduled job not run)'); }
+  render();
+}
+// Route weather advisories from the IEM copy of AWC products (live and archived).
+async function loadAdvisories() {
+  const seq = ++data.advSeq, T = refTime(), key = state.mode + '|' + Math.floor(T / 3600e3);
+  if (data.adv.key === key && data.adv.st === 'ok') return;
+  data.adv = { g: [], s: [], c: [], key, st: 'load' };
+  setFeed('adv', 'load', 'Weather advisories: loading…');
+  const iso = d => d.toISOString().slice(0, 16) + 'Z', sts = iso(new Date(T - 7 * 3600e3)), ets = iso(new Date(+T + 14 * 3600e3));
+  const get = svc => fetch(`${IEM}/cgi-bin/request/gis/${svc}?sts=${sts}&ets=${ets}&format=kml`).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); }).then(parseKml);
+  try {
+    const [g, sg, c] = await Promise.all([get('awc_gairmets.py'), get('sigmets.py'), get('cwas.py')]);
+    if (seq !== data.advSeq) return;
+    data.adv = { key, st: 'ok',
+      g: g.map(x => ({ ...x, code: (x.p.GML_ID || '').split('-TAG')[0], at: +new Date(x.p.VALID_AT) })).filter(x => GAIR[x.code] && isFinite(x.at)),
+      s: sg.map(x => ({ ...x, s: +new Date(x.p.ISSUE), e: +new Date(x.p.EXPIRE) })).filter(x => isFinite(x.s) && isFinite(x.e)),
+      c: c.map(x => ({ ...x, s: +new Date(x.p.ISSUE), e: +new Date(x.p.EXPIRE) })).filter(x => isFinite(x.s) && isFinite(x.e)) };
+    setFeed('adv', 'ok', `Weather advisories: ${data.adv.g.length} G-AIRMET, ${data.adv.s.length} SIGMET, ${data.adv.c.length} CWA loaded`);
+  } catch (e) { if (seq !== data.advSeq) return; data.adv = { g: [], s: [], c: [], key, st: 'err' }; setFeed('adv', 'err', 'Weather advisories: failed (' + e.message + ')'); }
+  render();
+}
+// Special use airspace and military training routes in range (FAA aeronautical data, static).
+async function loadMil() {
+  const seq = ++data.milSeq, a = airport(state.apt), key = a.id + '|' + state.radius;
+  if (data.milKey === key) return;
+  data.sua = []; data.mtr = []; data.suaGeo = data.mtrGeo = null; data.milKey = '';
+  setFeed('mil', 'load', 'SUA / MTR: loading…');
+  const sp = { where: '1=1', geometry: `${a.lon},${a.lat}`, geometryType: 'esriGeometryPoint', inSR: '4326', spatialRel: 'esriSpatialRelIntersects', distance: state.radius, units: 'esriSRUnit_NauticalMile', f: 'geojson', maxAllowableOffset: '0.002', geometryPrecision: '4' };
+  try {
+    const [su, mt] = await Promise.all([
+      getJson(`${FAA}/Special_Use_Airspace/FeatureServer/0/query?` + new URLSearchParams({ ...sp, outFields: 'NAME,TYPE_CODE,UPPER_VAL,UPPER_UOM,UPPER_CODE,LOWER_VAL,LOWER_UOM,LOWER_CODE,TIMESOFUSE,CONT_AGENT' })),
+      getJson(`${FAA}/MTRSegment/FeatureServer/0/query?` + new URLSearchParams({ ...sp, outFields: 'IDENT,MTR_TYPE,UPPER_VAL,UPPER_UOM,UPPER_CODE,LOWER_VAL,LOWER_UOM,LOWER_CODE' })) ]);
+    if (seq !== data.milSeq) return;
+    su.features = (su.features || []).filter(f => f.geometry && altFt(f.properties.LOWER_VAL, f.properties.LOWER_UOM, f.properties.LOWER_CODE) < 18000);
+    mt.features = (mt.features || []).filter(f => f.geometry);
+    mt.features.forEach(f => f.properties.label = (['IR', 'VR', 'SR'][f.properties.MTR_TYPE] || 'MTR') + '-' + f.properties.IDENT);
+    data.suaGeo = su; data.mtrGeo = mt; data.milKey = key;
+    data.sua = su.features.map(f => ({ p: f.properties, geom: f.geometry })); data.mtr = mt.features.map(f => ({ p: f.properties, geom: f.geometry }));
+    setFeed('mil', 'ok', `SUA / MTR: ${new Set(data.sua.map(x => x.p.NAME)).size} areas, ${new Set(data.mtr.map(x => x.p.label)).size} routes in range`);
+  } catch (e) { if (seq !== data.milSeq) return; setFeed('mil', 'err', 'SUA / MTR: failed (' + e.message + ')'); }
+  render();
+}
+// What the planned route and flight window run into.
+function findHits(a, ac, inc, rec, tz) {
+  const v = id => $(id).value, launch = toMin(v('launch')), onscene = Math.max(0, +v('onscene') || 0), refuel = rec.id !== a.id && v('recmode') === 'refuel';
+  const eteOut = leg(inc.d, ac, true, false), eteBack = leg(distNm(inc, rec), ac, false, true), eteHome = refuel ? leg(distNm(rec, a), ac, true, true) : 0;
+  const endMin = launch + (eteOut + onscene + eteBack) * 60 + (refuel ? 30 + eteHome * 60 : 0);
+  const day = +zonedToUtc(briefYmd(), 0, tz), w0 = day + launch * 60e3, w1 = day + endMin * 60e3;
+  const legs = [[a, inc], [inc, rec]]; if (refuel) legs.push([rec, a]);
+  const pts = routePoints(legs), onRoute = g => pts.some(p => inGeom(p.lon, p.lat, g));
+  const H = { w0, w1, g: [], s: [], c: [], tfrFire: [], tfrOther: [], sua: [], mtr: [] };
+  if (data.adv.st === 'ok') {
+    H.g = data.adv.g.filter(x => x.at >= w0 - 1.5 * 3600e3 && x.at <= w1 + 1.5 * 3600e3 && onRoute(x.geom));
+    H.s = data.adv.s.filter(x => x.s <= w1 && x.e >= w0 && onRoute(x.geom));
+    H.c = data.adv.c.filter(x => x.s <= w1 && x.e >= w0 && onRoute(x.geom));
+  }
+  if (data.tfr && !data.tfr.stale) data.tfr.features.forEach(f => { if (!f.geometry) return;
+    if (distToGeom(inc, f.geometry) <= TFR_NM) H.tfrFire.push(f); else if (onRoute(f.geometry)) H.tfrOther.push(f); });
+  const seen = {};
+  data.sua.forEach(x => { if (!seen[x.p.NAME + x.p.LOWER_VAL + x.p.UPPER_VAL] && onRoute(x.geom)) { seen[x.p.NAME + x.p.LOWER_VAL + x.p.UPPER_VAL] = 1; H.sua.push(x); } });
+  const near = {}; data.mtr.forEach(x => { const d = distToGeom(inc, x.geom); if (d <= MTR_NM && (near[x.p.label] === undefined || d < near[x.p.label].d)) near[x.p.label] = { d, x }; });
+  H.mtr = Object.values(near).sort((p, q) => p.d - q.d);
+  return H;
+}
+const tfrText = f => { const p = f.properties; return `${p.notam} ${p.type || ''}${p.lower || p.upper ? ' · ' + (p.lower ? altText(p.lower.v, p.lower.uom, p.lower.code) : '?') + '–' + (p.upper ? altText(p.upper.v, p.upper.uom, p.upper.code) : '?') : ''}${p.exp ? ' · until ' + p.exp.slice(5, 16).replace('T', ' ') + (/Z$/.test(p.exp) ? 'Z' : ' local') : ''}`; };
+
 async function loadElev(inc) {
   if (!inc || data.elev[inc.id] !== undefined) return;
   data.elev[inc.id] = null;
@@ -727,11 +850,11 @@ function initMap() {
   const setBase = k => { if (tileLayer) map.removeLayer(tileLayer); const b = BASEMAPS[k]; tileLayer = L.tileLayer(b[1], { maxZoom: 18, ...b[2] }).addTo(map); tileLayer.bringToBack(); };
   setBase(saved);
   $('basemap').addEventListener('change', e => { setBase(e.target.value); try { localStorage.setItem('aab.basemap', e.target.value); } catch (x) {} });
-  lyr.zones = L.layerGroup().addTo(map); lyr.perim = L.layerGroup().addTo(map); lyr.ring = L.layerGroup().addTo(map); lyr.route = L.layerGroup().addTo(map); lyr.pts = L.layerGroup().addTo(map);
+  lyr.zones = L.layerGroup().addTo(map); lyr.mil = L.layerGroup().addTo(map); lyr.adv = L.layerGroup().addTo(map); lyr.tfr = L.layerGroup().addTo(map); lyr.perim = L.layerGroup().addTo(map); lyr.ring = L.layerGroup().addTo(map); lyr.route = L.layerGroup().addTo(map); lyr.pts = L.layerGroup().addTo(map);
   L.control.scale({ imperial: true, metric: false }).addTo(map);
 }
 let lastFit = '';
-function renderMap(a, list, inc, rec) {
+function renderMap(a, list, inc, rec, H) {
   if (!map) return;
   lyr.ring.clearLayers(); lyr.route.clearLayers(); lyr.pts.clearLayers(); lyr.perim.clearLayers(); lyr.zones.clearLayers();
   if (state.showZones && data.zoneGeo) {
@@ -745,6 +868,17 @@ function renderMap(a, list, inc, rec) {
         l.on('click', e => { if (state.zone === z.id) state.zpt = { lat: e.latlng.lat, lon: e.latlng.lng }; else { state.zone = z.id; state.zpt = null; } state.inc = null; state.view = 'zone'; render(); }); },
     }).addTo(lyr.zones);
   }
+  lyr.mil.clearLayers(); lyr.adv.clearLayers(); lyr.tfr.clearLayers();
+  if (state.showMil) {
+    if (data.suaGeo) L.geoJSON(data.suaGeo, { style: { color: '#b0006d', weight: 1.5, fill: false },
+      onEachFeature: (f, l) => { const p = f.properties; l.bindTooltip(`<b>${esc(p.NAME)}</b> (${esc(p.TYPE_CODE)})<br>${altText(p.LOWER_VAL, p.LOWER_UOM, p.LOWER_CODE)} to ${altText(p.UPPER_VAL, p.UPPER_UOM, p.UPPER_CODE)}<br>${esc(p.TIMESOFUSE || 'Times of use not published')}`, { sticky: true }); } }).addTo(lyr.mil);
+    if (data.mtrGeo) L.geoJSON(data.mtrGeo, { style: { color: '#5d4037', weight: 1.5, opacity: 0.8 },
+      onEachFeature: (f, l) => { const p = f.properties; l.bindTooltip(`<b>${esc(p.label)}</b><br>${altText(p.LOWER_VAL, p.LOWER_UOM, p.LOWER_CODE)} to ${altText(p.UPPER_VAL, p.UPPER_UOM, p.UPPER_CODE)}`, { sticky: true }); } }).addTo(lyr.mil);
+  }
+  if (state.showAdv && H) [['G-AIRMET', H.g, x => (GAIR[x.code] || [x.code])[0] + ': ' + (x.p.WXCOND || '')], ['SIGMET', H.s, x => (x.p.LABEL || '') + ' ' + String(x.p.TEXT || '').replace(/\s+/g, ' ').slice(0, 160)], ['CWA', H.c, x => (x.p.CENTER || '') + ' ' + (x.p.NARRATIV || '')]]
+    .forEach(([nm, arr, txt]) => arr.forEach(x => L.geoJSON({ type: 'Feature', geometry: x.geom }, { style: { color: nm === 'G-AIRMET' ? '#00796b' : '#d0021b', weight: 2, dashArray: '8 5', fill: false } }).bindTooltip(`<b>${nm}</b><br>${esc(txt(x))}`, { sticky: true }).addTo(lyr.adv)));
+  if (state.showTfr && data.tfr && !data.tfr.stale) L.geoJSON({ type: 'FeatureCollection', features: data.tfr.features.filter(f => f.geometry) }, { style: { color: '#7b1fa2', weight: 2, fillColor: '#7b1fa2', fillOpacity: 0.18 },
+    onEachFeature: (f, l) => l.bindPopup(`<b>TFR ${esc(f.properties.notam)}</b> (${esc(f.properties.type || '')})<br>${esc(f.properties.title || '')}<br>${esc(tfrText(f))}<br><a href="https://tfr.faa.gov/tfr3/?page=detail_${String(f.properties.notam).replace('/', '_')}" target="_blank" rel="noopener">Open on tfr.faa.gov</a>`) }).addTo(lyr.tfr);
   if (inc && inc.zone) L.marker([inc.lat, inc.lon], { icon: L.divIcon({ className: '', html: '<div class="zonept"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), zIndexOffset: 450, interactive: false }).addTo(lyr.route);
   const circle = L.circle([a.lat, a.lon], { radius: state.radius * 1852, color: '#1d4f80', weight: 2, dashArray: '6 6', fill: false }).addTo(lyr.ring);
   L.marker([a.lat, a.lon], { icon: L.divIcon({ className: '', html: '<div class="basemk"></div>', iconSize: [14, 14] }), zIndexOffset: 500 }).bindTooltip(a.id + ' · staffing base').addTo(lyr.ring);
@@ -903,8 +1037,9 @@ function render() {
   $('recmodewrap').hidden = !state.recover;
   const rec = state.recover ? airport(state.recover) : a;
 
-  renderMap(a, list, inc, rec);
-  renderBrief(a, ac, inc, { o, da, fc, rw }, all, rec, T, tz);
+  const H = inc ? findHits(a, ac, inc, rec, tz) : null;
+  renderMap(a, list, inc, rec, H);
+  renderBrief(a, ac, inc, { o, da, fc, rw }, all, rec, T, tz, H);
 }
 function alertText(x) {
   const a = airport(state.apt), tz = aptTz(a), ymd = briefYmd();
@@ -914,6 +1049,11 @@ const ageText = ms => { const h = ms / 3600e3; return h < 1 ? Math.max(1, Math.r
 const cxLabel = i => i.k === 'IA' ? 'New start' : (i.lvl || i.org || 'Unassigned').replace(' Incident', '').replace('Complex Incident Management Team', 'CIMT');
 
 const MIT = {
+  gair: 'Read the full G-AIRMET; plan altitudes and an exit route around the affected area.',
+  sig: 'Avoid the SIGMET area; delay or reroute.',
+  cwa: 'Read the full advisory and check with Flight Service or ATC.',
+  tfrroute: 'Route around the TFR or get authorization before entering.',
+  milgeo: 'Have dispatch confirm the status with the scheduling activity before launch.',
   fwz: 'Expect rapid fire growth and new starts; plan fuel and relief for an extended or diverted mission.',
   fc: 'Check the TAF trend; consider delaying launch or another base.',
   wind: 'Review the forecast for the launch and recovery windows.',
@@ -938,7 +1078,7 @@ const MIT = {
   jur: 'Get the local aviation brief and frequency plan from dispatch.',
 };
 
-function renderBrief(a, ac, inc, wx, all, rec, T, tz) {
+function renderBrief(a, ac, inc, wx, all, rec, T, tz, H) {
   const tbody = $('factors').querySelector('tbody'), route = $('route');
   if (!inc) {
     $('band').className = 'band none';
@@ -1023,7 +1163,16 @@ function renderBrief(a, ac, inc, wx, all, rec, T, tz) {
       !fz.alerts.length ? 0 : rfwHit ? 2 : 1, state.mode === 'replay' ? 'NWS warning archive' : 'NWS alerts');
   } else add('Medium', null, 'Fire weather zone', (data.feeds.zones || {}).cls === 'load' ? 'Loading zones…' : 'Zone not found', null, 'NWS');
   add('Medium', 'day', 'Daylight at end of time over fire', `${dayMargin >= 0 ? Math.round(dayMargin) + ' min before' : Math.round(-dayMargin) + ' min past'} legal end`, dayMargin < 0 ? 3 : dayMargin < 60 ? 2 : 0, 'Computed sunset at ' + a.id);
-  add('Medium', null, 'Route weather (G-AIRMET, SIGMET, CWA)', 'Not connected', null, 'Build 2');
+  // Route weather advisories for the planned flight window
+  if (data.adv.st !== 'ok') add('Medium', null, 'Route weather advisories (G-AIRMET, SIGMET, CWA)', data.adv.st === 'err' ? 'Could not be loaded' : 'Loading…', null, 'AWC via IEM');
+  else {
+    const codes = [...new Set(H.g.map(x => x.code))], asrc = state.mode === 'replay' ? 'AWC archive via IEM' : 'AWC via IEM';
+    add('Medium', 'gair', 'G-AIRMETs on the route', codes.length ? codes.map(c => GAIR[c][0]).join(' · ') : 'None on the route', Math.max(0, ...codes.map(c => GAIR[c][1])), asrc);
+    const conv = H.s.some(x => /TS|CONVECTIVE|TORNADO/i.test(x.p.TEXT || '') || /\dC$|\d[EWC]$/.test(x.p.LABEL || ''));
+    add('Medium', 'sig', 'SIGMETs on the route', H.s.length ? [...new Set(H.s.map(x => x.p.LABEL))].join(', ') + (conv ? ' · convective' : '') : 'None on the route', !H.s.length ? 0 : conv ? 3 : 2, asrc);
+    const cts = H.c.some(x => /\bTS/i.test(x.p.NARRATIV || ''));
+    add('Medium', 'cwa', 'Center Weather Advisories on the route', H.c.length ? H.c.slice(0, 2).map(x => `${x.p.CENTER} ${x.p.NUMBER || ''}: ${String(x.p.NARRATIV || '').slice(0, 70)}`).join(' | ') : 'None on the route', !H.c.length ? 0 : cts ? 2 : 1, asrc);
+  }
   add('Medium', 'notam', 'NOTAMs, base and fire area', $('notamok').checked ? 'Checked' : 'Not checked', $('notamok').checked ? 0 : -2, 'Crew check');
   // ---- Mission
   const acount = Math.max(0, +v('acount') || 0), others = all.filter(i => i.id !== inc.id && distNm(inc, i) <= 25).length;
@@ -1039,8 +1188,24 @@ function renderBrief(a, ac, inc, wx, all, rec, T, tz) {
   if (fz) add('Mission', 'starts', `New starts in zone ${fz.id}`, fz.c24 === null ? 'Loading…' : `${fz.c24} in 24 h · ${fz.c48} in 48 h`, fz.c24 === null ? null : -1, 'WFIGS');
   add('Mission', 'apt', isZone ? 'Zone point near an airport' : 'Fire near an airport', `${nearApt.d.toFixed(0)} nm to ${nearApt.id}`, nearApt.d <= 5 ? 2 : nearApt.d <= 10 ? 1 : 0, 'Airport data (4,000 ft+ paved)');
   add('Mission', 'mission', 'Mission type', { ATGS:'ATGS orbit', ASM:'ASM low-level', LEAD:'Lead low-level', RECON:'Recon / IAA' }[mission], mission === 'ASM' || mission === 'LEAD' ? 1 : 0, 'Crew input');
-  add('Mission', 'tfr', 'TFRs, fire area and route', $('tfrok').checked ? 'Checked' : 'Not checked', $('tfrok').checked ? 0 : -2, 'Crew check (feed in build 2)');
-  add('Mission', 'mil', 'Military airspace deconfliction', $('milok').checked ? 'Confirmed with dispatch' : 'Not confirmed', $('milok').checked ? 0 : -2, 'Crew check (geometry in build 2)');
+  // TFRs
+  if (state.mode === 'replay') add('Mission', null, 'TFRs at the ' + tgt + ' and on the route', 'Not available in replay', null, 'tfr.faa.gov');
+  else if (!data.tfr || data.tfr.stale) add('Mission', null, 'TFRs at the ' + tgt + ' and on the route', data.tfr ? `Copy is ${ageText(data.tfr.age * 60e3)} old; check manually` : 'No TFR data; check manually', null, 'tfr.faa.gov copy');
+  else {
+    add('Mission', 'tfrfire', `TFR at the ${tgt} (within ${TFR_NM} nm)`, H.tfrFire.length ? H.tfrFire.map(tfrText).join(' | ') : 'None published', -1, `tfr.faa.gov copy, ${data.tfr.age} min old`);
+    const hard = H.tfrOther.some(f => !/HAZARD/i.test(f.properties.type || ''));
+    add('Mission', 'tfrroute', 'Other TFRs on the route', H.tfrOther.length ? H.tfrOther.map(tfrText).join(' | ') : 'None on the route', !H.tfrOther.length ? 0 : hard ? 2 : 1, `tfr.faa.gov copy, ${data.tfr.age} min old`);
+  }
+  add('Mission', 'tfr', 'TFRs confirmed with an official source', $('tfrok').checked ? 'Checked' : 'Not checked', $('tfrok').checked ? 0 : -2, 'Crew check');
+  // Military airspace
+  if ((data.feeds.mil || {}).cls === 'ok') {
+    const restricted = H.sua.some(x => /^(R|P)$/.test(x.p.TYPE_CODE)), flagged = H.sua.length || H.mtr.length, ok = $('milok').checked;
+    const parts = H.sua.map(x => `${x.p.NAME} (${altText(x.p.LOWER_VAL, x.p.LOWER_UOM, x.p.LOWER_CODE)}–${altText(x.p.UPPER_VAL, x.p.UPPER_UOM, x.p.UPPER_CODE)})`)
+      .concat(H.mtr.map(m => `${m.x.p.label} ${m.d < 0.5 ? 'over the ' + tgt : Math.round(m.d) + ' nm from the ' + tgt}`));
+    add('Mission', 'milgeo', `Military airspace on the route or within ${MTR_NM} nm of the ${tgt}`, flagged ? parts.slice(0, 6).join(' · ') + (parts.length > 6 ? ` · +${parts.length - 6} more` : '') : 'None',
+      !flagged || ok ? 0 : restricted ? 2 : 1, 'FAA aeronautical data');
+  } else add('Mission', null, 'Military airspace on the route', (data.feeds.mil || {}).cls === 'err' ? 'Could not be loaded' : 'Loading…', null, 'FAA aeronautical data');
+  add('Mission', 'mil', 'Military airspace deconfliction', $('milok').checked ? 'Confirmed with dispatch' : 'Not confirmed', $('milok').checked ? 0 : -2, 'Crew check');
   // ---- Member, Machine, Management
   const crewFlags = ($('trainee').checked ? 1 : 0) + ($('unfamiliar').checked ? 1 : 0);
   add('Member', 'duty', 'Projected duty day', `${dutyLen.toFixed(1)} h of 14`, dutyLen > 14 ? 3 : dutyLen > 12 ? 2 : dutyLen > 10 ? 1 : 0, 'Crew input');
@@ -1090,7 +1255,7 @@ function renderBrief(a, ac, inc, wx, all, rec, T, tz) {
 
 // ====================== INIT ======================
 let reloadTimer;
-const reloadAll = () => { state.inc = null; loadWx(); loadIncidents(); loadZones(); };
+const reloadAll = () => { state.inc = null; loadWx(); loadIncidents(); loadZones(); loadTfr(); loadAdvisories(); loadMil(); };
 function setAirport(id) { state.apt = id; state.rwy = null; state.recover = ''; state.zone = null; state.zpt = null; reloadAll(); }
 
 async function init() {
@@ -1107,7 +1272,7 @@ async function init() {
   $('aircraft').innerHTML = AIRCRAFT.map(x => `<option value="${x.id}">${x.name}</option>`).join('');
   $('radius').innerHTML = RADII.map(r => `<button type="button" data-r="${r}" id="r${r}">${r}</button>`).join('');
   $('filt').innerHTML = Object.entries(KINDS).map(([k, l]) => `<label><input type="checkbox" id="f${k}" data-k="${k}" checked>${symIcon(k)}<span>${l} (<span id="cnt${k}">0</span>)</span></label>`).join('');
-  $('legend').innerHTML = Object.entries(KINDS).map(([k, l]) => `<span>${symIcon(k)}${l}</span>`).join('') + '<span>◆ staffing base</span><span>Shaded areas are mapped perimeters</span><span><i class="sw rfw"></i> Red Flag Warning</span><span><i class="sw fww"></i> Fire Weather Watch</span><span><i class="sw fwz"></i> Fire weather zone</span>';
+  $('legend').innerHTML = Object.entries(KINDS).map(([k, l]) => `<span>${symIcon(k)}${l}</span>`).join('') + '<span>◆ staffing base</span><span>Shaded areas are mapped perimeters</span><span><i class="sw rfw"></i> Red Flag Warning</span><span><i class="sw fww"></i> Fire Weather Watch</span><span><i class="sw fwz"></i> Fire weather zone</span><span><i class="sw tfr"></i> TFR</span><span><i class="sw sua"></i> Special use airspace</span><span><i class="sw mtr"></i> Military training route</span><span><i class="sw adv"></i> Weather advisory on route</span>';
   $('airport').value = state.apt; $('aircraft').value = state.acft;
 
   $('airport').addEventListener('change', e => { $('otherapt').value = ''; setAirport(e.target.value); });
@@ -1120,12 +1285,15 @@ async function init() {
   });
   $('runway').addEventListener('change', e => { state.rwy = e.target.value; render(); });
   $('aircraft').addEventListener('change', e => { state.acft = e.target.value; render(); });
-  $('radius').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.radius = +b.dataset.r; state.inc = null; loadIncidents(); loadZones(); render(); });
+  $('radius').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.radius = +b.dataset.r; state.inc = null; loadIncidents(); loadZones(); loadMil(); render(); });
   $('filt').addEventListener('change', e => { const k = e.target.dataset.k; if (k) { state.filt[k] = e.target.checked; render(); } });
   $('incidents').addEventListener('change', e => { if (e.target.name === 'inc') { state.inc = e.target.value; state.zone = null; state.zpt = null; render(); } });
   $('zones').addEventListener('change', e => { if (e.target.name === 'zone') { state.zone = e.target.value; state.zpt = null; state.inc = null; render(); } });
   $('view').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.view = b.dataset.v; render(); });
   $('zonetoggle').addEventListener('change', e => { state.showZones = e.target.checked; render(); });
+  $('tfrtoggle').addEventListener('change', e => { state.showTfr = e.target.checked; render(); });
+  $('miltoggle').addEventListener('change', e => { state.showMil = e.target.checked; render(); });
+  $('advtoggle').addEventListener('change', e => { state.showAdv = e.target.checked; render(); });
   $('recover').addEventListener('change', e => { state.recover = e.target.value; render(); });
   ['mission', 'onscene', 'duty', 'flown', 'acount', 'smoke', 'tsfire', 'trainee', 'unfamiliar', 'newjur', 'milok', 'notamok', 'tfrok', 'recmode'].forEach(id => $(id).addEventListener('input', render));
   $('launch').addEventListener('input', () => { render(); if (state.mode === 'replay') { clearTimeout(reloadTimer); reloadTimer = setTimeout(reloadAll, 700); } });

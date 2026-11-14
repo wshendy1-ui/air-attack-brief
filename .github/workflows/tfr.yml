@@ -1,0 +1,36 @@
+name: Copy TFRs
+
+# Copies current TFRs from tfr.faa.gov into data/tfr.json about every 20 minutes.
+# GitHub may start scheduled runs late. The dashboard shows the age of the copy
+# and stops using it after an hour, so a late or failed run is visible there.
+on:
+  schedule:
+    - cron: '7,27,47 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tfr-copy
+  cancel-in-progress: true
+
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Fetch TFRs
+        run: node tools/pull_tfr.mjs
+      - name: Commit the new copy
+        run: |
+          git config user.name "tfr-copy-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/tfr.json
+          git commit -m "TFR copy $(date -u +%Y-%m-%dT%H:%MZ)" || exit 0
+          git pull --rebase --autostash
+          git push
